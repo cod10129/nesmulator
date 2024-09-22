@@ -224,19 +224,19 @@ impl Header {
             if shift_count == 0 { 0 }
             else { 64 << shift_count }
         };
-        let rom_size_combiner = |msb: u8, lsb: u8| -> u32 {
+        let rom_size_combiner = |msb: u8, lsb: u8, size_factor: u32| -> u32 {
             assert!(msb < 0x10);
             let (msb, lsb): (u32, u32) = (msb.into(), lsb.into());
             if msb == 0xF {
                 let (exponent, multiplier) = (msb & 0b1111_1100, msb & 0b11);
                 2u32.pow(exponent) * ((multiplier * 2) + 1)
             } else {
-                (msb << 8) | lsb
+                ((msb << 8) | lsb) * size_factor
             }
         };
         Ok((i, Header {
-            prg_rom_size: rom_size_combiner(prg_rom_size_msb, prg_rom_size_lsb),
-            chr_rom_size: rom_size_combiner(chr_rom_size_msb, chr_rom_size_lsb),
+            prg_rom_size: rom_size_combiner(prg_rom_size_msb, prg_rom_size_lsb, 16 * 1024),
+            chr_rom_size: rom_size_combiner(chr_rom_size_msb, chr_rom_size_lsb, 8 * 1024),
             prg_ram_size:   shift_ct_to_ram_size(prg_ram_shift_count),
             prg_nvram_size: shift_ct_to_ram_size(prg_nvram_shift_count),
             chr_ram_size:   shift_ct_to_ram_size(chr_ram_shift_count),
