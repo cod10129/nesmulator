@@ -3,7 +3,7 @@
 //! <https://www.nesdev.org/wiki/NES_2.0>
 
 use nom::bits::{self, complete::bool as parse_bool};
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take};
 use nom::combinator::map;
 use nom::error::context;
 use nom::error::VerboseError;
@@ -25,8 +25,44 @@ fn take_bits_u16<'a>(count: usize) -> impl Fn(BitInput<'a>) -> BitParseResult<'a
     nom::bits::complete::take(count)
 }
 
-/// The NES 2.0 file header.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// An entire NES 2.0 file.
+pub struct File {
+    pub header: Header,
+    /// Used by some games modified to run on early emulators
+    /// to put compatibility code into this range.
+    pub trainer: Option<[u8; 512]>,
+    pub prg_rom: Box<[u8]>,
+    pub chr_rom: Box<[u8]>,
+    pub misc_rom: Box<[u8]>,
+}
+
+impl File {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn parse(i: Input<'_>) -> ParseResult<'_, Self> {
+        let (i, header) = context("File header", Header::parse)(i)?;
+        let (i, trainer) = if header.trainer_is_present {
+            let (i, data) = context("Trainer data", take(512usize))(i)?;
+            (i, Some(<[u8; 512]>::try_from(data).unwrap()))
+        } else {
+            (i, None)
+        };
+        let (i, (prg_rom, chr_rom, misc_rom)) = tuple((
+            context("PRG-ROM data", take(header.prg_rom_size)),
+            context("CHR-ROM data", take(header.chr_rom_size)),
+            context("Miscellaneous ROM area", nom::combinator::rest),
+        ))(i)?;
+        Ok((i, File {
+            header, trainer,
+            prg_rom: prg_rom.into(),
+            chr_rom: chr_rom.into(),
+            misc_rom: misc_rom.into(),
+        }))
+    }
+}
+
+/// The NES 2.0 file header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Header {
     pub is_nes_2: Nes2OrInes,
     /// Not to be confused with `prg_ram_size`.
