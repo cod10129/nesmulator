@@ -10,6 +10,8 @@ use nom::error::VerboseError;
 use nom::number::complete::u8;
 use nom::sequence::tuple;
 
+use core::fmt;
+
 type Input<'a> = &'a [u8];
 type BitInput<'a> = (Input<'a>, usize);
 type NomError<'a> = VerboseError<Input<'a>>;
@@ -25,7 +27,7 @@ fn take_bits_u16<'a>(count: usize) -> impl Fn(BitInput<'a>) -> BitParseResult<'a
     nom::bits::complete::take(count)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 /// An entire NES 2.0 file.
 pub struct File {
     pub header: Header,
@@ -58,6 +60,21 @@ impl File {
             chr_rom: chr_rom.into(),
             misc_rom: misc_rom.into(),
         }))
+    }
+}
+
+impl fmt::Debug for File {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("File")
+            .field("header", &self.header)
+            .field("trainer", match self.trainer {
+                None => &"None",
+                Some(_) => &"<512 bytes hidden>",
+            })
+            .field("prg_rom", &format_args!("<{} bytes hidden>", self.prg_rom.len()))
+            .field("chr_rom", &format_args!("<{} bytes hidden>", self.chr_rom.len()))
+            .field("misc_rom", &format_args!("<{} bytes hidden>", self.misc_rom.len()))
+            .finish()
     }
 }
 
