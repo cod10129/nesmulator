@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/nesfile",
+]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "forbid"
+deprecated_safe = "forbid"
+# missing_docs = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+must_use_candidate = "allow"

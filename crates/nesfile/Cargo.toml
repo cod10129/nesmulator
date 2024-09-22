@@ -1,0 +1,10 @@
+[package]
+name = "nesfile"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+nom = "7.1"
+
+[lints]
+workspace = true
