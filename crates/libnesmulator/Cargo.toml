@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 nesfile = { path = "../nesfile" }
+bitvec = "1.0"
 
 [lints]
 workspace = true
