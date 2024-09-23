@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-nesfile = { path = "..\nesfile" }
+nesfile = { path = "../nesfile" }
 
 [lints]
 workspace = true
