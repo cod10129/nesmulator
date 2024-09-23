@@ -15,3 +15,4 @@ deprecated_safe = "forbid"
 pedantic = { level = "warn", priority = -1 }
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
+enum_glob_use = "allow"
