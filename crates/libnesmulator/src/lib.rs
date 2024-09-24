@@ -2,6 +2,9 @@
 //! It's a fully functional emulator, with UI provided by the binary crates.
 
 use bitvec::prelude as bv;
+use std::fmt;
+
+type ParseResult<'a, O> = nom::IResult<&'a [u8], O, nom::error::VerboseError<&'a [u8]>>;
 
 /// The state of the CPU registers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -217,3 +220,94 @@ pub struct InstructionWithMode {
 
 // Declare this to pull in one `impl InstructionWithMode`.
 mod all_opcodes;
+
+/// A full instruction with a type, addressing mode, and operand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FullInstruction {
+    pub instruction: InstructionWithMode,
+    pub operand: Operand,
+}
+
+impl FullInstruction {
+    pub fn parse(i: &[u8]) -> ParseResult<'_, FullInstruction> {
+        use nom::{
+            combinator::{map, map_res},
+            error::context,
+            number::complete::u8,
+        };
+        let (i, inst_with_mode) = context(
+            "InstructionWithMode",
+            map_res(u8, InstructionWithMode::parse),
+        )(i)?;
+        let operand_size = inst_with_mode.addressing_mode.operand_size();
+        let (i, operand) = match operand_size {
+            0 => (i, Operand::None),
+            1 => context("Operand", map(u8, Operand::OneByte))(i)?,
+            2 => context("Operand", map(
+                nom::number::complete::le_u16,
+                Operand::TwoBytes,
+            ))(i)?,
+            3..=u8::MAX => unreachable!(),
+        };
+        Ok((i, FullInstruction {
+            instruction: inst_with_mode,
+            operand
+        }))
+    }
+}
+
+/// An operand to an instruction, either 0, 1, or 2 bytes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Operand {
+    None,
+    OneByte(u8),
+    TwoBytes(u16),
+}
+
+impl fmt::Debug for Operand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Operand::None => write!(f, "None"),
+            Operand::OneByte(b) => write!(f, "${b:02X}"),
+            Operand::TwoBytes(b) => write!(f, "${b:04X}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operand_debug() {
+        fn format(operand: Operand) -> String {
+            format!("{operand:?}")
+        }
+        assert_eq!(format(Operand::None), "None");
+        assert_eq!(format(Operand::OneByte(33)), "$21");
+        assert_eq!(format(Operand::TwoBytes(0x0B_8A)), "$0B8A");
+    }
+
+    #[test]
+    fn full_instruction_parse() {
+        let (i, inst) = FullInstruction::parse(b"\xEA").unwrap();
+        assert!(i.is_empty());
+        assert_eq!(inst, FullInstruction {
+            instruction: InstructionWithMode {
+                addressing_mode: AddressingMode::Implied,
+                instruction_type: Instruction::NoOp,
+            },
+            operand: Operand::None,
+        });
+
+        let (i, inst) = FullInstruction::parse(b"\x4C\xEF\xBE").unwrap();
+        assert!(i.is_empty());
+        assert_eq!(inst, FullInstruction {
+            instruction: InstructionWithMode {
+                instruction_type: Instruction::Jump,
+                addressing_mode: AddressingMode::Absolute,
+            },
+            operand: Operand::TwoBytes(0xBEEF),
+        });
+    }
+}

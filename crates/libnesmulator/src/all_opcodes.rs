@@ -4,7 +4,7 @@ impl InstructionWithMode {
     /// Returns an `Err` if the opcode is invalid or unrecognized.
     #[allow(clippy::match_same_arms)]
     #[allow(clippy::too_many_lines)] // It's ONE MATCH.
-    fn parse(n: u8) -> Result<Self, ()> {
+    pub(crate) fn parse(n: u8) -> Result<Self, ()> {
         use Instruction::*;
         use AddressingMode::*;
         fn c(i: Instruction, am: AddressingMode) -> InstructionWithMode {
