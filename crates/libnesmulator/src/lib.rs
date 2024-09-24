@@ -52,16 +52,16 @@ pub enum AddressingMode {
     /// The opcode is followed by a `u16` address. This pointer is followed,
     /// and the PC is set to whatever address is read from that pointer.
     Indirect,
-    // Begin Indexed Operations, which add the X and Y registers to addresses
-    /// The target address is determined by an absolute operand (`u16`)
-    /// and a register (X or Y).
-    /// The target is the sum of the absolute operand and register value.
-    AbsoluteIndexed,
-    /// This is like absolute indexing, but with one `u8` that's an address in the zero page.
-    /// **THE TARGET ADDRESS WRAPS THE ZERO PAGE.**
-    /// If you have an operand of `$C0` and an X of `$60`, that wraps to the address
-    /// `$C0+$60 && $FF` or `$20`.
-    ZeroPageIndexed,
+    /// The target address is the sum of the absolute operand `u16` and value of X.
+    AbsoluteIndexedX,
+    /// The target address is the sum of the absolute operand `u16` and value of Y.
+    AbsoluteIndexedY,
+    /// Like `AbsoluteIndexedX`, but with a `u8` that's an address in the zero page.
+    /// **THE ADDRESS CALCULATION WRAPS THE ZERO PAGE.**
+    ZeroPageIndexedX,
+    /// Like `AbsoluteIndexedY`, but with a `u8` that's an address in the zero page.
+    /// **THE ADDRESS CALCULATION WRAPS THE ZERO PAGE.**
+    ZeroPageIndexedY,
     /// Not to be confused with `IndirectIndexed`.
     /// 
     /// This mode is only used with the X register. The operand is a zero page `u8` index.
@@ -82,9 +82,138 @@ impl AddressingMode {
         use AddressingMode::*;
         match self {
             Implied | Accumulator => 0,
-            Immediate | Relative | ZeroPage | ZeroPageIndexed
+            Immediate | Relative | ZeroPage
+                | ZeroPageIndexedX | ZeroPageIndexedY
                 | IndexedIndirect | IndirectIndexed => 1,
-            Absolute | Indirect | AbsoluteIndexed => 2,
+            Absolute | Indirect | AbsoluteIndexedX | AbsoluteIndexedY => 2,
         }
     }
 }
+
+/// One of the ~46~ 44 instructions on the 6502.
+/// As this is the NES, the clear and set decimal mode instructions are disabled,
+/// as decimal mode does not exist on the NES.
+/// 
+/// <https://www.pagetable.com/c64ref/6502/?tab=2>
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Instruction {
+    /// `ADC`. Flags: `NViZC`.
+    AddWithCarry,
+    /// `AND`. Flags: `NviZc`.
+    AndMemory,
+    /// `ASL`. Flags: `NviZC`.
+    ArithmeticShiftLeft,
+    /// `BIT`. Flags: `NViZc`.
+    TestBits,
+    /// `BPL`. Flags: `nvizc`.
+    BranchOnPlus,
+    /// `BMI`. Flags: `nvizc`.
+    BranchOnMinus,
+    /// `BVC`. Flags: `nvizc`.
+    BranchOnOverflowClear,
+    /// `BVS`. Flags: `nvizc`.
+    BranchOnOverflowSet,
+    /// `BCC`. Flags: `nvizc`.
+    BranchOnCarryClear,
+    /// `BCS`. Flags: `nvizc`.
+    BranchOnCarrySet,
+    /// `BNE`. Flags: `nvizc`.
+    BranchOnNotEqual,
+    /// `BEQ`. Flags: `nvizc`.
+    BranchOnEqual,
+    /// `BRK`. Flags: `nvizcB`.
+    Break,
+    /// `CLC`. Flags: `nvizC`.
+    ClearCarryFlag,
+    /// `CLI`. Flags: `nvIzc`.
+    ClearInterruptDisable,
+    /// `CLV`. Flags: `nVizc`.
+    ClearOverflowFlag,
+    /// `CMP`. Flags: `NviZC`.
+    CompareAccumulator,
+    /// `CPX`. Flags: `NviZC`.
+    CompareXRegister,
+    /// `CPY`. Flags: `NviZC`.
+    CompareYRegister,
+    /// `DEC`. Flags: `NviZc`.
+    DecrementMemory,
+    /// `DEX`. Flags: `NviZc`.
+    DecrementRegisterX,
+    /// `DEY`. Flags: `NviZc`.
+    DecrementRegisterY,
+    /// `EOR`. Flags: `NviZc`.
+    ExclusiveOr,
+    /// `INC`. Flags: `NviZc`.
+    IncrementMemory,
+    /// `INX`. Flags: `NviZc`.
+    IncrementRegisterX,
+    /// `INY`. Flags: `NviZc`.
+    IncrementRegisterY,
+    /// `JMP`. Flags: `nvizc`.
+    Jump,
+    /// `JSR`. Flags: `nvizc`.
+    JumpToSubroutine,
+    /// `LDA`. Flags: `NviZc`.
+    LoadAccumulator,
+    /// `LDX`. Flags: `NviZc`.
+    LoadRegisterX,
+    /// `LDY`. Flags: `NviZc`.
+    LoadRegisterY,
+    /// `LSR`. Flags: `NviZC`.
+    LogicalShiftRight,
+    /// `NOP`. Flags: `nvizc`.
+    NoOp,
+    /// `ORA`. Flags: `NviZc`.
+    OrMemory,
+    /// `PHA`. Flags: `nvizc`.
+    PushAccumulator,
+    /// `PHP`. Flags: `nvizc`.
+    PushFlags,
+    /// `PLA`. Flags: `NviZc`.
+    PullAccumulator,
+    /// `PLP`. Flags: `NVIZCD`.
+    PullFlags,
+    /// `ROL`. Flags: `NviZC`.
+    RotateLeft,
+    /// `ROR`. Flags: `NviZC`.
+    RotateRight,
+    /// `RTI`. Flags: `NVIZCD`.
+    ReturnFromInterrupt,
+    /// `RTS`. Flags: `nvizc`.
+    ReturnFromSubroutine,
+    /// `SBC`. Flags: `NViZC`.
+    SubtractWithCarry,
+    /// `SEC`. Flags: `nvizC`.
+    SetCarryFlag,
+    /// `SEI`. Flags: `nvIzc`.
+    SetInterruptDisable,
+    /// `STA`. Flags: `nvizc`.
+    StoreAccumulator,
+    /// `STX`. Flags: `nvizc`.
+    StoreRegisterX,
+    /// `STY`. Flags: `nvizc`.
+    StoreRegisterY,
+    /// `TAX`. Flags: `NviZc`.
+    TransferAccToRegisterX,
+    /// `TAY`. Flags: `NviZc`.
+    TransferAccToRegisterY,
+    /// `TSX`. Flags: `NviZc`.
+    TransferStackToRegisterX,
+    /// `TXS`. Flags: `nvizc`.
+    TransferRegisterXToStack,
+    /// `TXA`. Flags: `NviZc`.
+    TransferRegisterXToAcc,
+    /// `TYA`. Flags: `NviZc`.
+    TransferRegisterYToAcc,
+}
+
+/// An instruction with its addressing mode.
+/// Each combination in this struct has its own opcode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InstructionWithMode {
+    pub instruction_type: Instruction,
+    pub addressing_mode: AddressingMode,
+}
+
+// Declare this to pull in one `impl InstructionWithMode`.
+mod all_opcodes;
