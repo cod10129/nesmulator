@@ -17,7 +17,7 @@ impl InstructionWithMode {
 
         Ok(match n {
             0x00 => c(Break, Implied),
-            0x01 => c(OrMemory, IndirectIndexed),
+            0x01 => c(OrMemory, IndexedIndirect),
             0x02 => return UNRECOGNIZED,
             0x03 => return UNRECOGNIZED,
             0x04 => return UNRECOGNIZED,
@@ -141,7 +141,7 @@ impl InstructionWithMode {
             0x7A => return UNRECOGNIZED,
             0x7B => return UNRECOGNIZED,
             0x7C => return UNRECOGNIZED,
-            0x7D => c(AddWithCarry, AbsoluteIndexedY),
+            0x7D => c(AddWithCarry, AbsoluteIndexedX),
             0x7E => c(RotateRight, AbsoluteIndexedX),
             0x7F => return UNRECOGNIZED,
             0x80 => return UNRECOGNIZED,
@@ -274,4 +274,21 @@ impl InstructionWithMode {
             0xFF => return UNRECOGNIZED,
         })
     }
+}
+
+#[cfg(test)]
+#[test]
+fn no_duplicates() {
+    use std::collections::HashSet;
+    let mut uniq = HashSet::new();
+    let has_unique_elements = (0..=u8::MAX)
+        .filter_map(|n| InstructionWithMode::parse(n).ok())
+        .all(|inst| {
+            let res = uniq.insert(inst);
+            if !res {
+                eprintln!("Element {inst:#?} already present in set");
+            }
+            res
+        });
+    assert!(has_unique_elements);
 }
