@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-nom = "7.1"
+nom = { workspace = true }
 
 [lints]
 workspace = true

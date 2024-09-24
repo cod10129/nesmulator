@@ -5,6 +5,9 @@ members = [
     "crates/libnesmulator",
 ]
 
+[workspace.dependencies]
+nom = "7.1"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "forbid"
