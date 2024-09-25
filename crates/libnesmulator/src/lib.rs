@@ -6,7 +6,41 @@ use std::fmt;
 type ParseResult<'a, O> = nom::IResult<&'a [u8], O, nom::error::VerboseError<&'a [u8]>>;
 
 mod registers;
-pub use registers::{CpuRegisters, CpuFlags};
+pub use registers::{
+    CpuRegisters, CpuFlags,
+    PpuRegisters,
+        PpuCtrl, SpriteSize, VramIncrement,
+};
+
+/// An address on the NES 6502.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct Addr {
+    inner: u16,
+}
+
+impl Addr {
+    pub const NULL: Self = Self { inner: 0 };
+    pub fn from_num(n: u16) -> Self { n.into() }
+    pub fn into_num(self) -> u16 { self.inner }
+}
+
+impl From<u16> for Addr {
+    fn from(addr: u16) -> Self {
+        Self { inner: addr }
+    }
+}
+
+impl From<Addr> for u16 {
+    fn from(addr: Addr) -> Self {
+        addr.inner
+    }
+}
+
+impl fmt::Debug for Addr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "${:04X}", self.inner)
+    }
+}
 
 /// An addressing mode on the 6502 chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -205,6 +239,22 @@ pub struct FullInstruction {
 }
 
 impl FullInstruction {
+    /// Parses the `FullInstruction` from byte data.
+    /// 
+    /// ```
+    /// use libnesmulator::{
+    ///     FullInstruction, InstructionWithMode, Instruction,
+    ///     AddressingMode, Operand
+    /// };
+    /// let (i, instruction) = FullInstruction::parse(b"\xC9\x42").unwrap();
+    /// assert_eq!(instruction, FullInstruction {
+    ///     instruction: InstructionWithMode {
+    ///         instruction_type: Instruction::CompareAccumulator,
+    ///         addressing_mode: AddressingMode::Immediate,
+    ///     },
+    ///     operand: Operand::OneByte(0x42),
+    /// });
+    /// ```
     pub fn parse(i: &[u8]) -> ParseResult<'_, FullInstruction> {
         use nom::{
             combinator::{map, map_res},

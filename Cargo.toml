@@ -16,6 +16,7 @@ deprecated_safe = "forbid"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+match_bool = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 enum_glob_use = "allow"
