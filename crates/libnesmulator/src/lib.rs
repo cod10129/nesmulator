@@ -10,6 +10,8 @@ pub use registers::{
     CpuRegisters, CpuFlags,
     PpuRegisters,
         PpuCtrl, SpriteSize, VramIncrement,
+    PpuMask,
+    PpuStatus,
 };
 
 /// An address on the NES 6502.

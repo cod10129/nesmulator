@@ -36,7 +36,7 @@ impl CpuFlags {
 pub struct PpuRegisters {
     pub ctrl: PpuCtrl,
     pub mask: PpuMask,
-    // pub status: PpuStatus,
+    pub status: PpuStatus,
     // pub scroll: PpuScroll,
     // pub addr: PpuAddr,
     // pub data: PpuData,
@@ -47,7 +47,7 @@ pub struct PpuRegisters {
 
 /// The flags to control PPU operation.
 /// 
-/// Access: Mutable
+/// Access: RW.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuCtrl {
     // TODO Currently unmapped in this library:
@@ -128,7 +128,7 @@ impl VramIncrement {
 /// The `PPUMASK` register on the NES,
 /// controlling sprite and background rendering.
 /// 
-/// Access: Mutable.
+/// Access: RW.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuMask {
     inner: bv::BitArray<u8, bv::Lsb0>,
@@ -146,4 +146,21 @@ impl PpuMask {
     pub fn emphasize_green_pal(self) -> bool { self.inner[5] }
     pub fn emphasize_blue_ntsc(self) -> bool { self.inner[7] }
     pub fn emphasize_blue_pal(self) -> bool { self.inner[7] }
+}
+
+// TODO:
+// Wiki says reads of this clear some address latch?
+/// PPU status register, maybe for timing.
+/// 
+/// Access: R.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PpuStatus {
+    // Bits 0-4 are actually unmapped
+    // idk what 5 even does??
+    inner: bv::BitArray<u8, bv::Lsb0>,
+}
+
+impl PpuStatus {
+    pub fn sprite0_hit(self) -> bool { self.inner[6] }
+    pub fn in_vblank(self) -> bool { self.inner[7] }
 }
