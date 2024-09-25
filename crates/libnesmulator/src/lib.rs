@@ -8,6 +8,7 @@ type ParseResult<'a, O> = nom::IResult<&'a [u8], O, nom::error::VerboseError<&'a
 mod registers;
 pub use registers::{
     CpuRegisters, CpuFlags,
+    PpuState,
     PpuRegisters,
         PpuCtrl, SpriteSize, VramIncrement,
     PpuMask,

@@ -31,6 +31,27 @@ impl CpuFlags {
     pub fn get_negative(self) -> bool { self.inner[7] }
 }
 
+/// The full state of the Picture Processing Unit.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PpuState {
+    pub regs: PpuRegisters,
+    internal_registers: PpuInternalRegisters,
+}
+
+/// The four internal registers of the PPU.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PpuInternalRegisters {
+    v: u8,
+    t: u8,
+    x: u8,
+    /// The "write latch" or "write toggle".
+    /// Is this the second write (true)?
+    /// 
+    /// Toggles on writes to `PPUSCROLL`/`PPUADDR`
+    /// Clears on reads of `PPUSTATUS`.
+    w: bool,
+}
+
 /// The registers of the Picture Processing Unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuRegisters {
@@ -161,6 +182,19 @@ pub struct PpuStatus {
 }
 
 impl PpuStatus {
-    pub fn sprite0_hit(self) -> bool { self.inner[6] }
-    pub fn in_vblank(self) -> bool { self.inner[7] }
+    // This function is called whenever the register is read from.
+    fn on_read(state: &mut PpuState) {
+        state.internal_registers.w = false;
+        state.regs.status.inner.set(7, false);
+    }
+
+    pub fn sprite0_hit(self, state: &mut PpuState) -> bool {
+        Self::on_read(state);
+        self.inner[6]
+    }
+
+    pub fn in_vblank(self, state: &mut PpuState) -> bool {
+        Self::on_read(state);
+        self.inner[7]
+    }
 }
