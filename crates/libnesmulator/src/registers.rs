@@ -35,7 +35,7 @@ impl CpuFlags {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuRegisters {
     pub ctrl: PpuCtrl,
-    // pub mask: PpuMask,
+    pub mask: PpuMask,
     // pub status: PpuStatus,
     // pub scroll: PpuScroll,
     // pub addr: PpuAddr,
@@ -46,6 +46,8 @@ pub struct PpuRegisters {
 }
 
 /// The flags to control PPU operation.
+/// 
+/// Access: Mutable
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuCtrl {
     // TODO Currently unmapped in this library:
@@ -121,4 +123,27 @@ impl VramIncrement {
             Self::GoingDown => 32,
         }
     }
+}
+
+/// The `PPUMASK` register on the NES,
+/// controlling sprite and background rendering.
+/// 
+/// Access: Mutable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PpuMask {
+    inner: bv::BitArray<u8, bv::Lsb0>,
+}
+
+impl PpuMask {
+    pub fn is_grayscale(self) -> bool { self.inner[0] }
+    pub fn show_background_leftmost(self) -> bool { self.inner[1] }
+    pub fn show_sprites_leftmost(self) -> bool { self.inner[2] }
+    pub fn show_background(self) -> bool { self.inner[3] }
+    pub fn show_sprites(self) -> bool { self.inner[4] }
+    pub fn emphasize_red_ntsc(self) -> bool { self.inner[5] }
+    pub fn emphasize_red_pal(self) -> bool { self.inner[6] }
+    pub fn emphasize_green_ntsc(self) -> bool { self.inner[6] }
+    pub fn emphasize_green_pal(self) -> bool { self.inner[5] }
+    pub fn emphasize_blue_ntsc(self) -> bool { self.inner[7] }
+    pub fn emphasize_blue_pal(self) -> bool { self.inner[7] }
 }
