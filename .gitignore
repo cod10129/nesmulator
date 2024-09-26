@@ -1,3 +1,4 @@
 target/
 Cargo.lock
 nesdev-pages
+crates/nesfile/tests/roms-for-testing/*.nes
