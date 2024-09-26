@@ -2,6 +2,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use bitvec::prelude as bv;
+use bv::BitArray;
 
 use crate::Addr;
 
@@ -20,7 +21,7 @@ pub struct CpuRegisters {
 pub struct CpuFlags {
     /// This is actually just a `u8`, but the `bitvec` APIs are very convenient.
     /// (and by that I mean just being able to [] into a bitvector)
-    inner: bv::BitArray<u8, bv::Lsb0>,
+    inner: BitArray<u8, bv::Lsb0>,
 }
 
 impl CpuFlags {
@@ -41,8 +42,8 @@ pub struct PpuState {
 /// The four internal registers of the PPU.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct PpuInternalRegisters {
-    v: u8,
-    t: u8,
+    v: PpuVramAddress,
+    t: PpuVramAddress,
     x: u8,
     /// The "write latch" or "write toggle".
     /// Is this the second write (true)?
@@ -52,18 +53,33 @@ struct PpuInternalRegisters {
     w: bool,
 }
 
+/// A struct containing a PPU VRAM address register.
+/// 
+/// (During rendering, used for scroll positions).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PpuVramAddress {
+    /// This is conceptually only 15 bits, but there's no `u15`.
+    inner: BitArray<[u8; 2], bv::Lsb0>,
+}
+
+impl PpuVramAddress {
+    fn inner_mut(&mut self) -> &mut bv::BitSlice<u8, bv::Lsb0> {
+        &mut self.inner
+    }
+}
+
 /// The registers of the Picture Processing Unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuRegisters {
     pub ctrl: PpuCtrl,
     pub mask: PpuMask,
     pub status: PpuStatus,
-    // pub scroll: PpuScroll,
+    pub scroll: PpuScroll,
     // pub addr: PpuAddr,
     // pub data: PpuData,
-    pub oam_addr: u8,
-    pub oam_data: u8,
-    pub oam_dma: u8,
+    // pub oam_addr: u8,
+    // pub oam_data: u8,
+    // pub oam_dma: u8,
 }
 
 /// The flags to control PPU operation.
@@ -74,7 +90,7 @@ pub struct PpuCtrl {
     // TODO Currently unmapped in this library:
     // bit 6
     // Note that setting bit 6 can damage a physical NES console
-    inner: bv::BitArray<u8, bv::Lsb0>,
+    inner: BitArray<u8, bv::Lsb0>,
 }
 
 impl PpuCtrl {
@@ -152,7 +168,7 @@ impl VramIncrement {
 /// Access: RW.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PpuMask {
-    inner: bv::BitArray<u8, bv::Lsb0>,
+    inner: BitArray<u8, bv::Lsb0>,
 }
 
 impl PpuMask {
@@ -169,8 +185,6 @@ impl PpuMask {
     pub fn emphasize_blue_pal(self) -> bool { self.inner[7] }
 }
 
-// TODO:
-// Wiki says reads of this clear some address latch?
 /// PPU status register, maybe for timing.
 /// 
 /// Access: R.
@@ -178,7 +192,7 @@ impl PpuMask {
 pub struct PpuStatus {
     // Bits 0-4 are actually unmapped
     // idk what 5 even does??
-    inner: bv::BitArray<u8, bv::Lsb0>,
+    inner: BitArray<u8, bv::Lsb0>,
 }
 
 impl PpuStatus {
@@ -196,5 +210,36 @@ impl PpuStatus {
     pub fn in_vblank(self, state: &mut PpuState) -> bool {
         Self::on_read(state);
         self.inner[7]
+    }
+}
+
+/// The `PPUSCROLL` register, changing the scroll position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PpuScroll {
+    // This type actually only exists for the sake of the side effects of
+    // writing to it, putting data into internal registers `t` and `x`.
+    _empty: (),
+}
+
+impl PpuScroll {
+    pub fn write(self, state: &mut PpuState, byte: u8) {
+        let data = BitArray::new(byte);
+        #[allow(clippy::bool_comparison)]
+        if state.internal_registers.w == false {
+            let (t_data, x_data) = data.split_at(3);
+            bv::BitSlice::from_element_mut(&mut state.internal_registers.x)
+                [0..3]
+                .copy_from_bitslice(x_data);
+            state.internal_registers.t.inner_mut()
+                [0..5]
+                .copy_from_bitslice(t_data);
+            state.internal_registers.w = true;
+        } else {
+            let t_reg = state.internal_registers.t.inner_mut();
+            t_reg[8..10].copy_from_bitslice(&data[6..8]);
+            t_reg[5..8].copy_from_bitslice(&data[3..6]);
+            t_reg[12..15].copy_from_bitslice(&data[0..3]);
+            state.internal_registers.w = false;
+        }
     }
 }
