@@ -16,6 +16,8 @@ pub use registers::{
         PpuScroll,
 };
 
+pub mod mapping;
+
 /// An address on the NES 6502.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Addr {
