@@ -94,6 +94,14 @@ pub struct PpuCtrl {
 }
 
 impl PpuCtrl {
+    pub fn write(&mut self, state: &mut PpuState, data: u8) {
+        let data = BitArray::new(data);
+        state.internal_registers.t.inner_mut()
+            [10..12]
+            .copy_from_bitslice(&data[0..2]);
+        self.inner = data;
+    }
+
     pub fn should_generate_nmi(self) -> bool { self.inner[7] }
     pub fn sprite_size(self) -> SpriteSize {
         SpriteSize::from_bool(self.inner[5])
