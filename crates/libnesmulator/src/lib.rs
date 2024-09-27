@@ -17,9 +17,10 @@ pub use registers::{
 };
 
 pub mod mapping;
+pub mod emu;
 
 /// An address on the NES 6502.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Addr {
     inner: u16,
 }
@@ -27,6 +28,7 @@ pub struct Addr {
 impl Addr {
     pub const NULL: Self = Self { inner: 0 };
     pub fn from_num(n: u16) -> Self { n.into() }
+    pub fn from_u8(n: u8) -> Self { Self::from_num(n.into()) }
     pub fn into_num(self) -> u16 { self.inner }
 }
 
@@ -107,6 +109,57 @@ impl AddressingMode {
             Absolute | Indirect | AbsoluteIndexedX | AbsoluteIndexedY => 2,
         }
     }
+
+    /*
+    /// Returns the data associated with the instruction.
+    fn data(
+        self, operand: Operand, state: &emu::State
+    ) -> Result<AddressingModeData, emu::Fault> {
+        use AddressingMode as AM;
+        Ok(match self {
+            AM::Accumulator => AddressingModeData::Accumulator,
+            AM::Implied => AddressingModeData::Implied,
+            AM::Immediate => {
+                AddressingModeData::ByteValue(operand.unwrap_one_byte())
+            },
+            AM::Absolute => AddressingModeData::ByteValue(
+                state.read_byte(operand.unwrap_two_bytes().into())?
+            ),
+            AM::Relative => AddressingModeData::RelativeJump(
+                operand.unwrap_one_byte() as i8
+            ),
+            AM::ZeroPage => AddressingModeData::ByteValue(
+                state.read_byte(Addr::from_u8(operand.unwrap_one_byte()))?
+            ),
+            AM::Indirect => AddressingModeData::JumpTo({
+                let addr: Addr = operand.unwrap_two_bytes().into();
+                let lsb = state.read_byte(addr)?;
+                let msb_addr = addr.into_num().checked_add(1).unwrap();
+                let msb = state.read_byte(msb_addr.into())?;
+                u16::from_le_bytes([lsb, msb]).into()
+            }),
+            AM::AbsoluteIndexedX => A
+        })
+    }
+    */
+}
+
+/// An internal enum describing what can be returned by 
+/// [`AddressingMode::data`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum AddressingModeData {
+    /// [`AddressingMode::Accumulator`]
+    Accumulator,
+    /// [`AddressingMode::Implied`]
+    Implied,
+    /// Some byte value
+    ByteValue(u8),
+    /// Some 2-byte (word-sized) value
+    WordValue(u16),
+    /// How far should the relative jump go?
+    RelativeJump(i8),
+    /// Jump to this address
+    JumpTo(Addr),
 }
 
 /// One of the ~46~ 44 instructions on the 6502.
@@ -294,6 +347,26 @@ pub enum Operand {
     None,
     OneByte(u8),
     TwoBytes(u16),
+}
+
+impl Operand {
+    /// Unwraps the value from the `OneByte` variant.
+    #[track_caller]
+    pub fn unwrap_one_byte(self) -> u8 {
+        match self {
+            Operand::OneByte(n) => n,
+            _ => panic!("Operand::unwrap_one_byte called on non-OneByte variant"),
+        }
+    }
+
+    /// Unwraps the value from the `TwoBytes` variant.
+    #[track_caller]
+    pub fn unwrap_two_bytes(self) -> u16 {
+        match self {
+            Operand::TwoBytes(n) => n,
+            _ => panic!("Operand::unwrap_two_bytes called on non-TwoBytes variant"),
+        }
+    }
 }
 
 impl fmt::Debug for Operand {

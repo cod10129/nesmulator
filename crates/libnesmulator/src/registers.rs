@@ -14,7 +14,7 @@ pub struct CpuRegisters {
     pub y: u8,
     pub flags: CpuFlags,
     pub sp: u8,
-    pub pc: u16,
+    pub pc: Addr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
