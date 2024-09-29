@@ -206,7 +206,32 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             },
             _ => bad!(Addressing for TXS),
         },
-        // 49 more
+        Instruction::StoreRegisterX => match addressing_mode {
+            AddressingMode::Absolute => {
+                let Operand::TwoBytes(addr) = operand else {
+                    bad!(Operand expected TwoBytes);
+                };
+                state.write_byte(state.cpu_regs.x, addr.into())?;
+                delay_cycles(4);
+            }
+            AddressingMode::ZeroPage => {
+                let Operand::OneByte(zpaddr) = operand else {
+                    bad!(Operand expected OneByte);
+                };
+                state.write_byte(state.cpu_regs.x, Addr::from_u8(zpaddr))?;
+                delay_cycles(3);
+            },
+            AddressingMode::ZeroPageIndexedY => {
+                let Operand::OneByte(base) = operand else {
+                    bad!(Operand expected OneByte);
+                };
+                let addr = base.wrapping_add(state.cpu_regs.y);
+                state.write_byte(state.cpu_regs.x, Addr::from_u8(addr))?;
+                delay_cycles(4);
+            },
+            _ => bad!(Addressing for STX),
+        },
+        // 48 more
         _ => todo!()
     }
     Ok(())
