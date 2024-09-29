@@ -144,6 +144,7 @@ impl AddressingMode {
     */
 }
 
+/*
 /// An internal enum describing what can be returned by 
 /// [`AddressingMode::data`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -161,6 +162,7 @@ enum AddressingModeData {
     /// Jump to this address
     JumpTo(Addr),
 }
+*/
 
 /// One of the ~46~ 44 instructions on the 6502.
 /// As this is the NES, the clear and set decimal mode instructions are disabled,
@@ -350,21 +352,19 @@ pub enum Operand {
 }
 
 impl Operand {
-    /// Unwraps the value from the `OneByte` variant.
-    #[track_caller]
-    pub fn unwrap_one_byte(self) -> u8 {
+    /// Changes `self` into an `Option<u8>`.
+    pub fn one_byte(self) -> Option<u8> {
         match self {
-            Operand::OneByte(n) => n,
-            _ => panic!("Operand::unwrap_one_byte called on non-OneByte variant"),
+            Operand::OneByte(n) => Some(n),
+            _ => None,
         }
     }
 
-    /// Unwraps the value from the `TwoBytes` variant.
-    #[track_caller]
-    pub fn unwrap_two_bytes(self) -> u16 {
+    /// Changes `self` into an `Option<u16>`.
+    pub fn two_bytes(self) -> Option<u16> {
         match self {
-            Operand::TwoBytes(n) => n,
-            _ => panic!("Operand::unwrap_two_bytes called on non-TwoBytes variant"),
+            Operand::TwoBytes(n) => Some(n),
+            _ => None,
         }
     }
 }
