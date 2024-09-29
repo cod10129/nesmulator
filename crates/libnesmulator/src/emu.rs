@@ -196,7 +196,17 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             },
             _ => bad!(Addressing for PHP),
         },
-        // 50 more
+        Instruction::TransferRegisterXToStack => match addressing_mode {
+            AddressingMode::Implied => {
+                let Operand::None = operand else {
+                    bad!(Operand expected None);
+                };
+                state.cpu_regs.sp = state.cpu_regs.x;
+                delay_cycles(2);
+            },
+            _ => bad!(Addressing for TXS),
+        },
+        // 49 more
         _ => todo!()
     }
     Ok(())
