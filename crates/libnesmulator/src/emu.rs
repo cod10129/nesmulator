@@ -185,8 +185,18 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 delay_cycles(3);
             },
             _ => bad!(Addressing for PHA),
-        }
-        // 51 more
+        },
+        Instruction::PushFlags => match addressing_mode {
+            AddressingMode::Implied => {
+                let Operand::None = operand else {
+                    bad!(Operand expected None);
+                };
+                state.push_byte(state.cpu_regs.flags.value_to_push(false))?;
+                delay_cycles(3);
+            },
+            _ => bad!(Addressing for PHP),
+        },
+        // 50 more
         _ => todo!()
     }
     Ok(())

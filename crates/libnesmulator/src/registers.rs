@@ -36,6 +36,13 @@ impl CpuFlags {
     pub fn get_interrupt_disable(self) -> bool { self.inner[2] }
     pub fn get_overflow(self) -> bool { self.inner[6] }
     pub fn get_negative(self) -> bool { self.inner[7] }
+
+    pub(crate) fn value_to_push(self, set_b: bool) -> u8 {
+        let mut arr = self.inner;
+        arr.set(4, set_b);
+        arr.set(5, true);
+        arr.into_inner()
+    }
 }
 
 /// The full state of the Picture Processing Unit.
