@@ -152,6 +152,19 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }));
         }}
     }
+    
+    macro_rules! extract {
+        (Operand::None) => {{
+            let Operand::None = operand else {
+                bad!(Operand expected None);
+            };
+        }};
+        (Operand::$variant:ident($name:ident)) => {
+            let $crate::Operand::$variant($name) = operand else {
+                bad!(Operand expected $variant);
+            };
+        };
+    }
 
     match instruction {
         Instruction::NoOp => match addressing_mode {
@@ -160,16 +173,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::Jump => match addressing_mode {
             AddressingMode::Absolute => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
+                extract!(Operand::TwoBytes(addr));
                 state.cpu_regs.pc = Addr::from(addr);
                 delay_cycles(3);
             },
             AddressingMode::Indirect => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
+                extract!(Operand::TwoBytes(addr));
                 let jump_target = state.read_le_u16(addr.into())?;
                 state.cpu_regs.pc = Addr::from(jump_target);
                 delay_cycles(5);
@@ -178,9 +187,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::PushAccumulator => match addressing_mode {
             AddressingMode::Implied => {
-                let Operand::None = operand else {
-                    bad!(Operand expected None);
-                };
+                extract!(Operand::None);
                 state.push_byte(state.cpu_regs.a)?;
                 delay_cycles(3);
             },
@@ -188,9 +195,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::PushFlags => match addressing_mode {
             AddressingMode::Implied => {
-                let Operand::None = operand else {
-                    bad!(Operand expected None);
-                };
+                extract!(Operand::None);
                 state.push_byte(state.cpu_regs.flags.value_to_push(false))?;
                 delay_cycles(3);
             },
@@ -198,9 +203,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::TransferRegisterXToStack => match addressing_mode {
             AddressingMode::Implied => {
-                let Operand::None = operand else {
-                    bad!(Operand expected None);
-                };
+                extract!(Operand::None);
                 state.cpu_regs.sp = state.cpu_regs.x;
                 delay_cycles(2);
             },
@@ -208,23 +211,17 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::StoreRegisterX => match addressing_mode {
             AddressingMode::Absolute => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
+                extract!(Operand::TwoBytes(addr));
                 state.write_byte(state.cpu_regs.x, addr.into())?;
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
-                let Operand::OneByte(zpaddr) = operand else {
-                    bad!(Operand expected OneByte);
-                };
+                extract!(Operand::OneByte(zpaddr));
                 state.write_byte(state.cpu_regs.x, Addr::from_u8(zpaddr))?;
                 delay_cycles(3);
             },
             AddressingMode::ZeroPageIndexedY => {
-                let Operand::OneByte(base) = operand else {
-                    bad!(Operand expected OneByte);
-                };
+                extract!(Operand::OneByte(base));
                 let addr = base.wrapping_add(state.cpu_regs.y);
                 state.write_byte(state.cpu_regs.x, Addr::from_u8(addr))?;
                 delay_cycles(4);
@@ -233,30 +230,64 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::StoreRegisterY => match addressing_mode {
             AddressingMode::Absolute => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
+                extract!(Operand::TwoBytes(addr));
                 state.write_byte(state.cpu_regs.y, addr.into())?;
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
-                let Operand::OneByte(zpaddr) = operand else {
-                    bad!(Operand expected OneByte);
-                };
+                extract!(Operand::OneByte(zpaddr));
                 state.write_byte(state.cpu_regs.y, Addr::from_u8(zpaddr))?;
                 delay_cycles(3);
             },
             AddressingMode::ZeroPageIndexedX => {
-                let Operand::OneByte(base) = operand else {
-                    bad!(Operand expected OneByte);
-                };
+                extract!(Operand::OneByte(base));
                 let addr = base.wrapping_add(state.cpu_regs.x);
                 state.write_byte(state.cpu_regs.y, Addr::from_u8(addr))?;
                 delay_cycles(4);
             },
             _ => bad!(Addressing for STX),
         },
-        // 47 more
+        Instruction::StoreAccumulator => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (Addr::from(addr), 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(base));
+                    (Addr::from(base.wrapping_add(state.cpu_regs.x.into())), 5)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand::TwoBytes(base));
+                    (Addr::from(base.wrapping_add(state.cpu_regs.y.into())), 5)
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    (Addr::from_u8(zpaddr), 3)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(base));
+                    (Addr::from_u8(base.wrapping_add(state.cpu_regs.x)), 4)
+                },
+                AddressingMode::IndexedIndirect => {
+                    extract!(Operand::OneByte(base));
+                    let addr_location = Addr::from_u8(
+                        base.wrapping_add(state.cpu_regs.x)
+                    );
+                    (state.read_le_u16(addr_location)?.into(), 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    extract!(Operand::OneByte(base_addr));
+                    let base = state.read_le_u16(Addr::from_u8(base_addr))?;
+                    let addr = base.checked_add(state.cpu_regs.y.into()).unwrap();
+                    (Addr::from(addr), 6)
+                },
+                _ => bad!(Addressing for STA),
+            };
+            state.write_byte(state.cpu_regs.a, addr)?;
+            delay_cycles(cycles);
+        },
+        // 46 more
         _ => todo!()
     }
     Ok(())
