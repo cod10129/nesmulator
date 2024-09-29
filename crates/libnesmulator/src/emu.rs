@@ -287,7 +287,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.write_byte(state.cpu_regs.a, addr)?;
             delay_cycles(cycles);
         },
-        // 46 more
+        Instruction::TransferRegisterXToAcc => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for TXA);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.a = state.cpu_regs.x;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.a);
+            delay_cycles(2);
+        },
+        // 45 more
         _ => todo!()
     }
     Ok(())

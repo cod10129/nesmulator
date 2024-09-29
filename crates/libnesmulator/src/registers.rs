@@ -43,6 +43,14 @@ impl CpuFlags {
         arr.set(5, true);
         arr.into_inner()
     }
+
+    /// Sets the negative and zero flags accordingly
+    /// as if this value is being stored.
+    pub(crate) fn set_nz(&mut self, value: u8) {
+        self.inner.set(1, value == 0);
+        let value = BitArray::<u8, bv::Lsb0>::new(value);
+        self.inner.set(7, value[7]);
+    }
 }
 
 /// The full state of the Picture Processing Unit.
