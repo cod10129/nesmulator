@@ -21,6 +21,8 @@ fn delay_cycles(cycles: u8) {
 pub enum Fault {
     /// Program attempted to access unmapped memory
     UnmappedMemory(Addr),
+    /// The stack page ($0100-$01FF) was underflowed by the stack pointer
+    StackUnderflow,
     /// Something went wrong inside nesmulator
     InternalError(InternalErrorFault),
 }
@@ -99,6 +101,16 @@ impl State {
         Ok(u16::from_le_bytes([first, last]))
     }
 
+    /// # Faults
+    /// `StackUnderflow`
+    fn push_byte(&mut self, byte: u8) -> Result<(), Fault> {
+        let stack_pointer = self.cpu_regs.sp;
+        let new_sp = stack_pointer.checked_sub(1).ok_or(Fault::StackUnderflow)?;
+        self.cpu_regs.sp = new_sp;
+        self.write_byte(byte, self.cpu_regs.sp_as_address())?;
+        Ok(())
+    }
+
     pub fn exec_instruction(&mut self, inst: FullInstruction) -> Result<(), Fault> {
         exec_instruction(self, inst)
     }
@@ -164,7 +176,17 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             _ => bad!(Addressing for JMP),
         },
-        // 52 more
+        Instruction::PushAccumulator => match addressing_mode {
+            AddressingMode::Implied => {
+                let Operand::None = operand else {
+                    bad!(Operand expected None);
+                };
+                state.push_byte(state.cpu_regs.a)?;
+                delay_cycles(3);
+            },
+            _ => bad!(Addressing for PHA),
+        }
+        // 51 more
         _ => todo!()
     }
     Ok(())

@@ -17,6 +17,12 @@ pub struct CpuRegisters {
     pub pc: Addr,
 }
 
+impl CpuRegisters {
+    pub(crate) fn sp_as_address(self) -> Addr {
+        Addr::from(u16::from(self.sp) + 0x01_00)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuFlags {
     /// This is actually just a `u8`, but the `bitvec` APIs are very convenient.
