@@ -379,7 +379,32 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(incremented);
             delay_cycles(2);
         },
-        // 33 more
+        Instruction::DecrementMemory => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (addr.into(), 6)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(base));
+                    (base.wrapping_add(state.cpu_regs.x.into()).into(), 7)
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    (Addr::from_u8(zpaddr), 5)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    (Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x)), 6)
+                },
+                _ => bad!(Addressing for DEC),
+            };
+            let decremented = state.read_byte(addr)?.wrapping_sub(1);
+            state.cpu_regs.flags.set_nz(decremented);
+            state.write_byte(decremented, addr)?;
+            delay_cycles(cycles);
+        },
+        // 32 more
         _ => todo!()
     }
     Ok(())
