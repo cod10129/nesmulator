@@ -51,6 +51,11 @@ impl CpuFlags {
         let value = BitArray::<u8, bv::Lsb0>::new(value);
         self.inner.set(7, value[7]);
     }
+
+    pub(crate) fn set_carry(&mut self, val: bool) { self.inner.set(0, val) }
+    pub(crate) fn set_interrupt_disable(&mut self, disable_interrupt: bool) {
+        self.inner.set(2, disable_interrupt);
+    }
 }
 
 /// The full state of the Picture Processing Unit.

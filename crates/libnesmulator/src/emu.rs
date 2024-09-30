@@ -332,7 +332,23 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.x);
             delay_cycles(2);
         },
-        // 41 more
+        Instruction::SetCarryFlag => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for SEC);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.flags.set_carry(true);
+            delay_cycles(2);
+        },
+        Instruction::SetInterruptDisable => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for SEI);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.flags.set_interrupt_disable(true);
+            delay_cycles(2);
+        },
+        // 39 more
         _ => todo!()
     }
     Ok(())
