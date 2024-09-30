@@ -305,7 +305,25 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(2);
         },
-        // 44 more
+        Instruction::TransferAccToRegisterX => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for TAX);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.x = state.cpu_regs.a;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.x);
+            delay_cycles(2);
+        },
+        Instruction::TransferAccToRegisterY => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for TAY);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.y = state.cpu_regs.a;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.y);
+            delay_cycles(2);
+        },
+        // 42 more
         _ => todo!()
     }
     Ok(())
