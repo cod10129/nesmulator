@@ -296,7 +296,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(2);
         },
-        // 45 more
+        Instruction::TransferRegisterYToAcc => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for TYA);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.a = state.cpu_regs.y;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.a);
+            delay_cycles(2);
+        },
+        // 44 more
         _ => todo!()
     }
     Ok(())
