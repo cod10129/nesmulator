@@ -339,7 +339,33 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_overflow(false);
             delay_cycles(2);
         },
-        // 36 more``
+        Instruction::IncrementMemory => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (addr.into(), 6)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(base));
+                    (base.wrapping_add(state.cpu_regs.x.into()).into(), 7)
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    (Addr::from_u8(zpaddr), 5)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    (Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x)), 6)
+                },
+                _ => bad!(Addressing for INC),
+            };
+            let orig = state.read_byte(addr)?;
+            let new = orig.wrapping_add(1);
+            state.cpu_regs.flags.set_nz(new);
+            state.write_byte(new, addr)?;
+            delay_cycles(cycles);
+        }
+        // 35 more
         _ => todo!()
     }
     Ok(())
