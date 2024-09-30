@@ -245,7 +245,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 state.write_byte(state.cpu_regs.y, Addr::from_u8(addr))?;
                 delay_cycles(4);
             },
-            _ => bad!(Addressing for STX),
+            _ => bad!(Addressing for STY),
         },
         Instruction::StoreAccumulator => {
             let (addr, cycles) = match addressing_mode {
@@ -323,7 +323,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.y);
             delay_cycles(2);
         },
-        // 42 more
+        Instruction::TransferStackToRegisterX => {
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for TSX);
+            };
+            extract!(Operand::None);
+            state.cpu_regs.x = state.cpu_regs.sp;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.x);
+            delay_cycles(2);
+        },
+        // 41 more
         _ => todo!()
     }
     Ok(())
