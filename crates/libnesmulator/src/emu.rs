@@ -364,8 +364,22 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(new);
             state.write_byte(new, addr)?;
             delay_cycles(cycles);
-        }
-        // 35 more
+        },
+        Instruction::IncrementRegisterX => {
+            extract!(Implied None for INX);
+            let incremented = state.cpu_regs.x.wrapping_add(1);
+            state.cpu_regs.x = incremented;
+            state.cpu_regs.flags.set_nz(incremented);
+            delay_cycles(2);
+        },
+        Instruction::IncrementRegisterY => {
+            extract!(Implied None for INY);
+            let incremented = state.cpu_regs.y.wrapping_add(1);
+            state.cpu_regs.y = incremented;
+            state.cpu_regs.flags.set_nz(incremented);
+            delay_cycles(2);
+        },
+        // 33 more
         _ => todo!()
     }
     Ok(())
