@@ -164,17 +164,23 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 bad!(Operand expected $variant);
             };
         };
+        (Implied None for $inst:ident) => {{
+            let AddressingMode::Implied = addressing_mode else {
+                bad!(Addressing for $inst);
+            };
+            extract!(Operand::None);
+        }};
     }
 
     match instruction {
-        Instruction::NoOp => match addressing_mode {
-            AddressingMode::Implied => { delay_cycles(2) },
-            _ => bad!(Addressing for NOP),
+        Instruction::NoOp => {
+            extract!(Implied None for NOP);
+            delay_cycles(2);
         },
         Instruction::Jump => match addressing_mode {
             AddressingMode::Absolute => {
                 extract!(Operand::TwoBytes(addr));
-                state.cpu_regs.pc = Addr::from(addr);
+                state.cpu_regs.pc = addr.into();
                 delay_cycles(3);
             },
             AddressingMode::Indirect => {
@@ -185,29 +191,20 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             _ => bad!(Addressing for JMP),
         },
-        Instruction::PushAccumulator => match addressing_mode {
-            AddressingMode::Implied => {
-                extract!(Operand::None);
-                state.push_byte(state.cpu_regs.a)?;
-                delay_cycles(3);
-            },
-            _ => bad!(Addressing for PHA),
+        Instruction::PushAccumulator => {
+            extract!(Implied None for PHA);
+            state.push_byte(state.cpu_regs.a)?;
+            delay_cycles(3);
         },
-        Instruction::PushFlags => match addressing_mode {
-            AddressingMode::Implied => {
-                extract!(Operand::None);
-                state.push_byte(state.cpu_regs.flags.value_to_push(false))?;
-                delay_cycles(3);
-            },
-            _ => bad!(Addressing for PHP),
+        Instruction::PushFlags => {
+            extract!(Implied None for PHP);
+            state.push_byte(state.cpu_regs.flags.value_to_push(false))?;
+            delay_cycles(3);
         },
-        Instruction::TransferRegisterXToStack => match addressing_mode {
-            AddressingMode::Implied => {
-                extract!(Operand::None);
-                state.cpu_regs.sp = state.cpu_regs.x;
-                delay_cycles(2);
-            },
-            _ => bad!(Addressing for TXS),
+        Instruction::TransferRegisterXToStack => {
+            extract!(Implied None for TXS);
+            state.cpu_regs.sp = state.cpu_regs.x;
+            delay_cycles(2);
         },
         Instruction::StoreRegisterX => match addressing_mode {
             AddressingMode::Absolute => {
@@ -288,63 +285,42 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             delay_cycles(cycles);
         },
         Instruction::TransferRegisterXToAcc => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for TXA);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for TXA);
             state.cpu_regs.a = state.cpu_regs.x;
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(2);
         },
         Instruction::TransferRegisterYToAcc => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for TYA);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for TYA);
             state.cpu_regs.a = state.cpu_regs.y;
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(2);
         },
         Instruction::TransferAccToRegisterX => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for TAX);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for TAX);
             state.cpu_regs.x = state.cpu_regs.a;
             state.cpu_regs.flags.set_nz(state.cpu_regs.x);
             delay_cycles(2);
         },
         Instruction::TransferAccToRegisterY => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for TAY);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for TAY);
             state.cpu_regs.y = state.cpu_regs.a;
             state.cpu_regs.flags.set_nz(state.cpu_regs.y);
             delay_cycles(2);
         },
         Instruction::TransferStackToRegisterX => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for TSX);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for TSX);
             state.cpu_regs.x = state.cpu_regs.sp;
             state.cpu_regs.flags.set_nz(state.cpu_regs.x);
             delay_cycles(2);
         },
         Instruction::SetCarryFlag => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for SEC);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for SEC);
             state.cpu_regs.flags.set_carry(true);
             delay_cycles(2);
         },
         Instruction::SetInterruptDisable => {
-            let AddressingMode::Implied = addressing_mode else {
-                bad!(Addressing for SEI);
-            };
-            extract!(Operand::None);
+            extract!(Implied None for SEI);
             state.cpu_regs.flags.set_interrupt_disable(true);
             delay_cycles(2);
         },
