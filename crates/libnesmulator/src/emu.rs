@@ -324,7 +324,22 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_interrupt_disable(true);
             delay_cycles(2);
         },
-        // 39 more
+        Instruction::ClearCarryFlag => {
+            extract!(Implied None for CLC);
+            state.cpu_regs.flags.set_carry(false);
+            delay_cycles(2);
+        },
+        Instruction::ClearInterruptDisable => {
+            extract!(Implied None for CLI);
+            state.cpu_regs.flags.set_interrupt_disable(false);
+            delay_cycles(2);
+        },
+        Instruction::ClearOverflowFlag => {
+            extract!(Implied None for CLV);
+            state.cpu_regs.flags.set_overflow(false);
+            delay_cycles(2);
+        },
+        // 36 more``
         _ => todo!()
     }
     Ok(())

@@ -56,6 +56,9 @@ impl CpuFlags {
     pub(crate) fn set_interrupt_disable(&mut self, disable_interrupt: bool) {
         self.inner.set(2, disable_interrupt);
     }
+    pub(crate) fn set_overflow(&mut self, overflow: bool) {
+        self.inner.set(6, overflow);
+    }
 }
 
 /// The full state of the Picture Processing Unit.
