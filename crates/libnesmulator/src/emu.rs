@@ -97,7 +97,7 @@ impl State {
 
     fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
         let first = self.read_byte(addr)?;
-        let last = self.read_byte(Addr::from(addr.into_num() + 1))?;
+        let last = self.read_byte(addr.offset(1))?;
         Ok(u16::from_le_bytes([first, last]))
     }
 
@@ -270,11 +270,11 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 },
                 AddressingMode::AbsoluteIndexedX => {
                     extract!(Operand::TwoBytes(base));
-                    (Addr::from(base.wrapping_add(state.cpu_regs.x.into())), 5)
+                    (Addr::from(base).offset(state.cpu_regs.x.into()), 5)
                 },
                 AddressingMode::AbsoluteIndexedY => {
                     extract!(Operand::TwoBytes(base));
-                    (Addr::from(base.wrapping_add(state.cpu_regs.y.into())), 5)
+                    (Addr::from(base).offset(state.cpu_regs.y.into()), 5)
                 },
                 AddressingMode::ZeroPage => {
                     extract!(Operand::OneByte(zpaddr));
@@ -446,14 +446,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 },
                 AddressingMode::AbsoluteIndexedX => {
                     extract!(Operand::TwoBytes(base));
-                    let addr = base.wrapping_add(state.cpu_regs.x.into());
-                    let increment = on_different_pages(base.into(), addr.into());
-                    (state.read_byte(addr.into())?, 4 + u8::from(increment))
+                    let base = Addr::from(base);
+                    let addr = base.offset(state.cpu_regs.x.into());
+                    let increment = on_different_pages(base, addr);
+                    (state.read_byte(addr)?, 4 + u8::from(increment))
                 },
                 AddressingMode::AbsoluteIndexedY => {
                     extract!(Operand::TwoBytes(base));
-                    let addr = base.wrapping_add(state.cpu_regs.y.into()).into();
-                    let increment = on_different_pages(base.into(), addr);
+                    let base = Addr::from(base);
+                    let addr = base.offset(state.cpu_regs.y.into());
+                    let increment = on_different_pages(base, addr);
                     (state.read_byte(addr)?, 4 + u8::from(increment))
                 },
                 AddressingMode::ZeroPage => {
@@ -475,10 +477,10 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 AddressingMode::IndirectIndexed => {
                     extract!(Operand::OneByte(baseloc));
                     let base = state.read_le_u16(Addr::from_u8(baseloc))?;
-                    let addr = base.wrapping_add(state.cpu_regs.y.into()).into();
+                    let addr = base.checked_add(state.cpu_regs.y.into()).unwrap();
                     let cycles = 5 +
-                        u8::from(on_different_pages(base.into(), addr));
-                    (state.read_byte(addr)?, cycles)
+                        u8::from(on_different_pages(base.into(), addr.into()));
+                    (state.read_byte(addr.into())?, cycles)
                 },
                 _ => bad!(Addressing for LDA),
             };
@@ -495,9 +497,10 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 },
                 AddressingMode::AbsoluteIndexedY => {
                     extract!(Operand::TwoBytes(base));
-                    let addr = base.wrapping_add(state.cpu_regs.y.into());
-                    let increment = on_different_pages(base.into(), addr.into());
-                    (Some(addr.into()), (4 + u8::from(increment)))
+                    let base = Addr::from(base);
+                    let addr = base.offset(state.cpu_regs.y.into());
+                    let increment = on_different_pages(base, addr);
+                    (Some(addr), (4 + u8::from(increment)))
                 },
                 AddressingMode::ZeroPage => {
                     extract!(Operand::OneByte(zpaddr));
@@ -530,8 +533,9 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 },
                 AddressingMode::AbsoluteIndexedX => {
                     extract!(Operand::TwoBytes(base));
-                    let addr = base.wrapping_add(state.cpu_regs.x.into()).into();
-                    let increment = on_different_pages(base.into(), addr);
+                    let base = Addr::from(base);
+                    let addr = base.offset(state.cpu_regs.x.into());
+                    let increment = on_different_pages(base, addr);
                     (Some(addr), 4 + u8::from(increment))
                 },
                 AddressingMode::ZeroPage => {
