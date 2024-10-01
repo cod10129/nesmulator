@@ -404,7 +404,19 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.write_byte(decremented, addr)?;
             delay_cycles(cycles);
         },
-        // 32 more
+        Instruction::DecrementRegisterX => {
+            extract!(Implied None for DEX);
+            state.cpu_regs.x = state.cpu_regs.x.wrapping_sub(1);
+            state.cpu_regs.flags.set_nz(state.cpu_regs.x);
+            delay_cycles(2);
+        },
+        Instruction::DecrementRegisterY => {
+            extract!(Implied None for DEY);
+            state.cpu_regs.y = state.cpu_regs.y.wrapping_sub(1);
+            state.cpu_regs.flags.set_nz(state.cpu_regs.y);
+            delay_cycles(2);
+        },
+        // 30 more
         _ => todo!()
     }
     Ok(())
