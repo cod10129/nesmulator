@@ -367,6 +367,15 @@ impl Operand {
             _ => None,
         }
     }
+
+    /// Returns how many bytes the `Operand` takes up.
+    pub fn size_bytes(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::OneByte(_) => 1,
+            Self::TwoBytes(_) => 2,
+        }
+    }
 }
 
 impl fmt::Debug for Operand {

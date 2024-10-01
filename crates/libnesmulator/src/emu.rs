@@ -116,6 +116,18 @@ impl State {
     }
 }
 
+/// This function **DOES** take care of pushing the program counter
+/// forward to point to after the currently executed instruction.
+/// 
+/// On branch instructions:
+/// 
+/// This API allows executing any instruction at any time, regardless of the
+/// program counter location.
+/// 
+/// Branch instructions are relative to the PC value after the instruction is executed.
+/// This function will assume the PC currently points to the branch instruction,
+/// using `PC + inst.size()` to determine the immediately after branch value
+/// of the program counter, which is neccessary to accurately compute cycle costs.
 #[allow(clippy::single_match_else)]
 #[allow(clippy::too_many_lines)]
 fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Fault> {
@@ -126,6 +138,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         operand,
     } = inst;
+
+    let mut should_push_pc = true;
 
     macro_rules! bad {
         (Addressing for $inst:tt) => {{
@@ -181,12 +195,14 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             AddressingMode::Absolute => {
                 extract!(Operand::TwoBytes(addr));
                 state.cpu_regs.pc = addr.into();
+                should_push_pc = false;
                 delay_cycles(3);
             },
             AddressingMode::Indirect => {
                 extract!(Operand::TwoBytes(addr));
                 let jump_target = state.read_le_u16(addr.into())?;
                 state.cpu_regs.pc = Addr::from(jump_target);
+                should_push_pc = false;
                 delay_cycles(5);
             }
             _ => bad!(Addressing for JMP),
@@ -541,6 +557,15 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         // 27 more
         _ => todo!()
     }
+
+    if should_push_pc {
+        let new = state.cpu_regs.pc
+            .into_num()
+            .checked_add(1 + u16::from(operand.size_bytes()))
+            .expect("execution should not overflow the address space");
+        state.cpu_regs.pc = Addr::from(new);
+    }
+
     Ok(())
 }
 
