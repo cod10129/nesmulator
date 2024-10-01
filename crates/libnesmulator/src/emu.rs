@@ -565,14 +565,25 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 bad!(Addressing for BCC);
             };
             extract!(Operand::OneByte(offset));
-            #[allow(clippy::cast_possible_wrap)]
             branch_common(
-                &mut state.cpu_regs.pc, offset as i8,
+                &mut state.cpu_regs.pc,
+                i8::from_le_bytes(u8::to_le_bytes(offset)),
                 state.cpu_regs.flags.get_carry().not(),
             );
             should_push_pc = false;
         },
-        // 26 more
+        Instruction::BranchOnCarrySet => {
+            let AddressingMode::Relative = addressing_mode else {
+                bad!(Addressing for BCS);
+            };
+            extract!(Operand::OneByte(offset));
+            branch_common(
+                &mut state.cpu_regs.pc,
+                i8::from_le_bytes(u8::to_le_bytes(offset)),
+                state.cpu_regs.flags.get_carry(),
+            );
+        },
+        // 25 more
         _ => todo!()
     }
 
