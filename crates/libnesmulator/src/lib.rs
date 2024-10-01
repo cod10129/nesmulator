@@ -30,6 +30,11 @@ impl Addr {
     pub fn from_num(n: u16) -> Self { n.into() }
     pub fn from_u8(n: u8) -> Self { Self::from_num(n.into()) }
     pub fn into_num(self) -> u16 { self.inner }
+
+    /// Overflow always wraps here
+    pub fn offset(self, offset: i16) -> Addr {
+        Addr::from_num(self.into_num().wrapping_add_signed(offset))
+    }
 }
 
 impl From<u16> for Addr {

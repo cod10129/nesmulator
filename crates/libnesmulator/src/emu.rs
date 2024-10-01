@@ -131,6 +131,8 @@ impl State {
 #[allow(clippy::single_match_else)]
 #[allow(clippy::too_many_lines)]
 fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Fault> {
+    use std::ops::Not;
+
     let FullInstruction {
         instruction: InstructionWithMode {
             instruction_type: instruction,
@@ -554,7 +556,19 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(value);
             delay_cycles(cycles);
         },
-        // 27 more
+        Instruction::BranchOnCarryClear => {
+            let AddressingMode::Relative = addressing_mode else {
+                bad!(Addressing for BCC);
+            };
+            extract!(Operand::OneByte(offset));
+            #[allow(clippy::cast_possible_wrap)]
+            branch_common(
+                &mut state.cpu_regs.pc, offset as i8,
+                state.cpu_regs.flags.get_carry().not(),
+            );
+            should_push_pc = false;
+        },
+        // 26 more
         _ => todo!()
     }
 
@@ -567,6 +581,26 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
     }
 
     Ok(())
+}
+
+/// Common code for all branch instructions.
+/// The new program count will include incrementing past the branch
+/// if the condition is false and the branch is not taken.
+fn branch_common(current_pc: &mut Addr, offset: i8, take_branch: bool) {
+    let current = *current_pc;
+    let target_address = current.offset(offset.into());
+    let following_address = current.offset(2);
+    let page_increment = on_different_pages(following_address, target_address);
+    *current_pc = if take_branch {
+        target_address
+    } else {
+        following_address
+    };
+    let cycles = match take_branch {
+        false => 2,
+        true => 3 + u8::from(page_increment),
+    };
+    delay_cycles(cycles);
 }
 
 fn on_different_pages(lhs: Addr, rhs: Addr) -> bool {
