@@ -468,6 +468,41 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(data);
             delay_cycles(cycles);
         },
+        Instruction::LoadRegisterX => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Immediate => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (Some(Addr::from(addr)), 4)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand::TwoBytes(base));
+                    let addr = base.wrapping_add(state.cpu_regs.y.into());
+                    let increment = on_different_pages(base.into(), addr.into());
+                    (Some(addr.into()), (4 + u8::from(increment)))
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    (Some(Addr::from_u8(zpaddr)), 3)
+                },
+                AddressingMode::ZeroPageIndexedY => {
+                    extract!(Operand::OneByte(zpbase));
+                    let addr = zpbase.wrapping_add(state.cpu_regs.y);
+                    (Some(Addr::from_u8(addr)), 4)
+                },
+                _ => bad!(Addressing for LDX),
+            };
+            let value = match addr {
+                Some(addr) => state.read_byte(addr)?,
+                None => {
+                    extract!(Operand::OneByte(immediate));
+                    immediate
+                },
+            };
+            state.cpu_regs.x = value;
+            state.cpu_regs.flags.set_nz(value);
+            delay_cycles(cycles);
+        },
         // 29 more
         _ => todo!()
     }
