@@ -416,8 +416,76 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.y);
             delay_cycles(2);
         },
-        // 30 more
+        Instruction::LoadAccumulator => {
+            let (data, cycles) = match addressing_mode {
+                AddressingMode::Immediate => {
+                    extract!(Operand::OneByte(val));
+                    (val, 2)
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (state.read_byte(addr.into())?, 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(base));
+                    let addr = base.wrapping_add(state.cpu_regs.x.into());
+                    let increment = on_different_pages(base.into(), addr.into());
+                    (state.read_byte(addr.into())?, 4 + u8::from(increment))
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand::TwoBytes(base));
+                    let addr = base.wrapping_add(state.cpu_regs.y.into()).into();
+                    let increment = on_different_pages(base.into(), addr);
+                    (state.read_byte(addr)?, 4 + u8::from(increment))
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    let addr = Addr::from_u8(zpaddr);
+                    (state.read_byte(addr)?, 3)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
+                    (state.read_byte(addr)?, 4)
+                },
+                AddressingMode::IndexedIndirect => {
+                    extract!(Operand::OneByte(base));
+                    let addrloc = Addr::from_u8(base.wrapping_add(state.cpu_regs.x));
+                    let addr = state.read_le_u16(addrloc)?.into();
+                    (state.read_byte(addr)?, 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    extract!(Operand::OneByte(baseloc));
+                    let base = state.read_le_u16(Addr::from_u8(baseloc))?;
+                    let addr = base.wrapping_add(state.cpu_regs.y.into()).into();
+                    let cycles = 5 +
+                        u8::from(on_different_pages(base.into(), addr));
+                    (state.read_byte(addr)?, cycles)
+                },
+                _ => bad!(Addressing for LDA),
+            };
+            state.cpu_regs.a = data;
+            state.cpu_regs.flags.set_nz(data);
+            delay_cycles(cycles);
+        },
+        // 29 more
         _ => todo!()
     }
     Ok(())
+}
+
+fn on_different_pages(lhs: Addr, rhs: Addr) -> bool {
+    const PAGE_SIZE: u16 = 256; // u8::MAX
+    (lhs.into_num() / PAGE_SIZE) != (rhs.into_num() / PAGE_SIZE)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn different_pages() {
+        use super::on_different_pages;
+
+        assert!(on_different_pages(0xBEFF.into(), 0xBC00.into()));
+        assert!(!on_different_pages(0x1200.into(), 0x12FF.into()));
+    }
 }
