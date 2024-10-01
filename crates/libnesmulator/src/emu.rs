@@ -503,7 +503,42 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(value);
             delay_cycles(cycles);
         },
-        // 29 more
+        Instruction::LoadRegisterY => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Immediate => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    (Some(addr.into()), 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(base));
+                    let addr = base.wrapping_add(state.cpu_regs.x.into()).into();
+                    let increment = on_different_pages(base.into(), addr);
+                    (Some(addr), 4 + u8::from(increment))
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    (Some(Addr::from_u8(zpaddr)), 3)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    let addr = zpbase.wrapping_add(state.cpu_regs.x);
+                    (Some(Addr::from_u8(addr)), 4)
+                },
+                _ => bad!(Addressing for LDY),
+            };
+            let value = match addr {
+                Some(addr) => state.read_byte(addr)?,
+                None => {
+                    extract!(Operand::OneByte(immediate));
+                    immediate
+                },
+            };
+            state.cpu_regs.x = value;
+            state.cpu_regs.flags.set_nz(value);
+            delay_cycles(cycles);
+        },
+        // 27 more
         _ => todo!()
     }
     Ok(())
