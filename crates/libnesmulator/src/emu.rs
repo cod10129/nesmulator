@@ -102,13 +102,24 @@ impl State {
     }
 
     /// # Faults
-    /// `StackUnderflow`
+    /// [`StackUnderflow`](Fault::StackUnderflow)
     fn push_byte(&mut self, byte: u8) -> Result<(), Fault> {
         let stack_pointer = self.cpu_regs.sp;
         let new_sp = stack_pointer.checked_sub(1).ok_or(Fault::StackUnderflow)?;
         self.cpu_regs.sp = new_sp;
-        self.write_byte(byte, self.cpu_regs.sp_as_address())?;
+        self.internal_ram[usize::from(self.cpu_regs.sp_as_address().into_num())] = byte;
         Ok(())
+    }
+    
+    /// # Faults
+    /// [`StackUnderflow`](Fault::StackUnderflow)
+    fn pop_byte(&mut self) -> Result<u8, Fault> {
+        let stack_pointer = self.cpu_regs.sp;
+        let new_sp = stack_pointer.checked_add(1).ok_or(Fault::StackUnderflow)?;
+        self.cpu_regs.sp = new_sp;
+        Ok(self.internal_ram[usize::from(
+            self.cpu_regs.sp_as_address().into_num()
+        )])
     }
 
     pub fn exec_instruction(&mut self, inst: FullInstruction) -> Result<(), Fault> {
