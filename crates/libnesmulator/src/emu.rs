@@ -188,6 +188,21 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         }};
     }
 
+    macro_rules! branch {
+        ($inst:ident: flags.$m1:ident()$(.$m2:ident())?) => {{
+            let AddressingMode::Relative = addressing_mode else {
+                bad!(Addressing for $inst);
+            };
+            extract!(Operand::OneByte(offset));
+            branch_common(
+                &mut state.cpu_regs.pc,
+                i8::from_le_bytes(u8::to_le_bytes(offset)),
+                state.cpu_regs.flags.$m1()$(.$m2())?
+            );
+            should_push_pc = false;
+        }};
+    }
+
     match instruction {
         Instruction::NoOp => {
             extract!(Implied None for NOP);
@@ -560,29 +575,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(value);
             delay_cycles(cycles);
         },
-        Instruction::BranchOnCarryClear => {
-            let AddressingMode::Relative = addressing_mode else {
-                bad!(Addressing for BCC);
-            };
-            extract!(Operand::OneByte(offset));
-            branch_common(
-                &mut state.cpu_regs.pc,
-                i8::from_le_bytes(u8::to_le_bytes(offset)),
-                state.cpu_regs.flags.get_carry().not(),
-            );
-            should_push_pc = false;
-        },
-        Instruction::BranchOnCarrySet => {
-            let AddressingMode::Relative = addressing_mode else {
-                bad!(Addressing for BCS);
-            };
-            extract!(Operand::OneByte(offset));
-            branch_common(
-                &mut state.cpu_regs.pc,
-                i8::from_le_bytes(u8::to_le_bytes(offset)),
-                state.cpu_regs.flags.get_carry(),
-            );
-        },
+        Instruction::BranchOnCarryClear => branch!(BCC: flags.get_carry().not()),
+        Instruction::BranchOnCarrySet => branch!(BCS: flags.get_carry()),
         // 25 more
         _ => todo!()
     }
