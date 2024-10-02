@@ -594,7 +594,13 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         Instruction::BranchOnPlus          => branch!(BPL: flags.get_negative().not()),
         Instruction::BranchOnOverflowClear => branch!(BVC: flags.get_overflow().not()),
         Instruction::BranchOnOverflowSet   => branch!(BVS: flags.get_overflow()),
-        // 19 more
+        Instruction::PullAccumulator => {
+            extract!(Implied None for PLA);
+            state.cpu_regs.a = state.pop_byte()?;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.a);
+            delay_cycles(4);
+        },
+        // 18 more
         _ => todo!()
     }
 
