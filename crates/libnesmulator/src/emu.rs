@@ -575,9 +575,15 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(value);
             delay_cycles(cycles);
         },
-        Instruction::BranchOnCarryClear => branch!(BCC: flags.get_carry().not()),
-        Instruction::BranchOnCarrySet => branch!(BCS: flags.get_carry()),
-        // 25 more
+        Instruction::BranchOnCarryClear    => branch!(BCC: flags.get_carry().not()),
+        Instruction::BranchOnCarrySet      => branch!(BCS: flags.get_carry()),
+        Instruction::BranchOnEqual         => branch!(BEQ: flags.get_zero()),
+        Instruction::BranchOnNotEqual      => branch!(BNE: flags.get_zero().not()),
+        Instruction::BranchOnMinus         => branch!(BMI: flags.get_negative()),
+        Instruction::BranchOnPlus          => branch!(BPL: flags.get_negative().not()),
+        Instruction::BranchOnOverflowClear => branch!(BVC: flags.get_overflow().not()),
+        Instruction::BranchOnOverflowSet   => branch!(BVS: flags.get_overflow()),
+        // 19 more
         _ => todo!()
     }
 
