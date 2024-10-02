@@ -600,7 +600,13 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(4);
         },
-        // 18 more
+        Instruction::PullFlags => {
+            extract!(Implied None for PLP);
+            let flags = crate::CpuFlags::from_pulled_value(state.pop_byte()?);
+            state.cpu_regs.flags = flags;
+            delay_cycles(4);
+        },
+        // 17 more
         _ => todo!()
     }
 

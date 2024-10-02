@@ -44,6 +44,14 @@ impl CpuFlags {
         arr.into_inner()
     }
 
+    pub(crate) fn from_pulled_value(pulled: u8) -> Self {
+        let mut arr = BitArray::new(pulled);
+        // Literally these bits are not stored in the NES CPU
+        arr.set(4, false);
+        arr.set(5, true);
+        CpuFlags { inner: arr }
+    }
+
     /// Sets the negative and zero flags accordingly
     /// as if this value is being stored.
     pub(crate) fn set_nz(&mut self, value: u8) {
