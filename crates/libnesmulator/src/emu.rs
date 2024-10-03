@@ -99,7 +99,7 @@ impl State {
 
     fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
         let first = self.read_byte(addr)?;
-        let last = self.read_byte(addr.offset(1))?;
+        let last = self.read_byte(addr.offset(1u8))?;
         Ok(u16::from_le_bytes([first, last]))
     }
 
@@ -188,6 +188,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 bad!(Operand expected None);
             };
         }};
+        (Operand($addr:ident)) => {
+            extract!(Operand::TwoBytes(_tmp_addr_value));
+            // This has to use the user's token to keep the span
+            extract!(@@internal assert_addr $addr);
+            let $addr = $crate::Addr::from_num(_tmp_addr_value);
+        };
+        (Operand(addr $name:ident)) => {
+            extract!(Operand::TwoBytes(_tmp_addr_value));
+            let $name = $crate::Addr::from_num(_tmp_addr_value);
+        };
         (Operand::$variant:ident($name:ident)) => {
             let $crate::Operand::$variant($name) = operand else {
                 bad!(Operand expected $variant);
@@ -199,6 +209,11 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             };
             extract!(Operand::None);
         }};
+        (@@internal assert_addr addr) => {};
+        (@@internal assert_addr $not_addr:ident) => {
+            compile_error!("expected Operand(addr). To use an arbitrary name \
+            use extract!(Operand(addr <$name>))");
+        };
     }
 
     macro_rules! branch {
@@ -223,14 +238,14 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::Jump => match addressing_mode {
             AddressingMode::Absolute => {
-                extract!(Operand::TwoBytes(addr));
-                state.cpu_regs.pc = addr.into();
+                extract!(Operand(addr));
+                state.cpu_regs.pc = addr;
                 should_push_pc = false;
                 delay_cycles(3);
             },
             AddressingMode::Indirect => {
-                extract!(Operand::TwoBytes(addr));
-                let jump_target = state.read_le_u16(addr.into())?;
+                extract!(Operand(addr));
+                let jump_target = state.read_le_u16(addr)?;
                 state.cpu_regs.pc = Addr::from(jump_target);
                 should_push_pc = false;
                 delay_cycles(5);
@@ -254,8 +269,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::StoreRegisterX => match addressing_mode {
             AddressingMode::Absolute => {
-                extract!(Operand::TwoBytes(addr));
-                state.write_byte(state.cpu_regs.x, addr.into())?;
+                extract!(Operand(addr));
+                state.write_byte(state.cpu_regs.x, addr)?;
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
@@ -273,8 +288,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::StoreRegisterY => match addressing_mode {
             AddressingMode::Absolute => {
-                extract!(Operand::TwoBytes(addr));
-                state.write_byte(state.cpu_regs.y, addr.into())?;
+                extract!(Operand(addr));
+                state.write_byte(state.cpu_regs.y, addr)?;
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
@@ -293,16 +308,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         Instruction::StoreAccumulator => {
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (Addr::from(addr), 4)
+                    extract!(Operand(addr));
+                    (addr, 4)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    (Addr::from(base).offset(state.cpu_regs.x.into()), 5)
+                    extract!(Operand(addr base));
+                    (base.offset(state.cpu_regs.x), 5)
                 },
                 AddressingMode::AbsoluteIndexedY => {
-                    extract!(Operand::TwoBytes(base));
-                    (Addr::from(base).offset(state.cpu_regs.y.into()), 5)
+                    extract!(Operand(addr base));
+                    (base.offset(state.cpu_regs.y), 5)
                 },
                 AddressingMode::ZeroPage => {
                     extract!(Operand::OneByte(zpaddr));
@@ -388,12 +403,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         Instruction::IncrementMemory => {
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (addr.into(), 6)
+                    extract!(Operand(addr));
+                    (addr, 6)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    (base.wrapping_add(state.cpu_regs.x.into()).into(), 7)
+                    extract!(Operand(addr base));
+                    (base.offset(state.cpu_regs.x), 7)
                 },
                 AddressingMode::ZeroPage => {
                     extract!(Operand::OneByte(zpaddr));
@@ -428,12 +443,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         Instruction::DecrementMemory => {
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (addr.into(), 6)
+                    extract!(Operand(addr));
+                    (addr, 6)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    (base.wrapping_add(state.cpu_regs.x.into()).into(), 7)
+                    extract!(Operand(addr base));
+                    (base.offset(state.cpu_regs.x), 7)
                 },
                 AddressingMode::ZeroPage => {
                     extract!(Operand::OneByte(zpaddr));
@@ -469,20 +484,18 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     (val, 2)
                 },
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (state.read_byte(addr.into())?, 4)
+                    extract!(Operand(addr));
+                    (state.read_byte(addr)?, 4)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.x.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
                     let increment = on_different_pages(base, addr);
                     (state.read_byte(addr)?, 4 + u8::from(increment))
                 },
                 AddressingMode::AbsoluteIndexedY => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.y.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
                     let increment = on_different_pages(base, addr);
                     (state.read_byte(addr)?, 4 + u8::from(increment))
                 },
@@ -520,13 +533,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Immediate => (None, 2),
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (Some(Addr::from(addr)), 4)
+                    extract!(Operand(addr));
+                    (Some(addr), 4)
                 },
                 AddressingMode::AbsoluteIndexedY => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.y.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
                     let increment = on_different_pages(base, addr);
                     (Some(addr), (4 + u8::from(increment)))
                 },
@@ -556,13 +568,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Immediate => (None, 2),
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (Some(addr.into()), 4)
+                    extract!(Operand(addr));
+                    (Some(addr), 4)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.x.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
                     let increment = on_different_pages(base, addr);
                     (Some(addr), 4 + u8::from(increment))
                 },
@@ -627,16 +638,15 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     delay_cycles(2);
                 },
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    let addr = Addr::from(addr);
+                    extract!(Operand(addr));
                     let input = state.read_byte(addr)?;
                     let out = rol_calc(input, &mut state.cpu_regs.flags);
                     state.write_byte(out, addr)?;
                     delay_cycles(6);
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(addr));
-                    let addr = Addr::from(addr.wrapping_add(state.cpu_regs.x.into()));
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
                     let input = state.read_byte(addr)?;
                     let out = rol_calc(input, &mut state.cpu_regs.flags);
                     state.write_byte(out, addr)?;
@@ -668,20 +678,18 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     (immediate, 2)
                 },
                 AddressingMode::Absolute => {
-                    extract!(Operand::TwoBytes(addr));
-                    (state.read_byte(addr.into())?, 4)
+                    extract!(Operand(addr));
+                    (state.read_byte(addr)?, 4)
                 },
                 AddressingMode::AbsoluteIndexedX => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.x.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
                     let increment = u8::from(on_different_pages(base, addr));
                     (state.read_byte(addr)?, 4 + increment)
                 },
                 AddressingMode::AbsoluteIndexedY => {
-                    extract!(Operand::TwoBytes(base));
-                    let base = Addr::from(base);
-                    let addr = base.offset(state.cpu_regs.y.into());
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
                     let increment = u8::from(on_different_pages(base, addr));
                     (state.read_byte(addr)?, 4 + increment)
                 },
@@ -704,7 +712,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 AddressingMode::IndirectIndexed => {
                     extract!(Operand::OneByte(baseloc));
                     let base = Addr::from(state.read_le_u16(Addr::from_u8(baseloc))?);
-                    let addr = base.offset(state.cpu_regs.y.into());
+                    let addr = base.offset(state.cpu_regs.y);
                     let increment = u8::from(on_different_pages(base, addr));
                     (state.read_byte(addr)?, 5 + increment)
                 },
@@ -734,8 +742,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
 /// if the condition is false and the branch is not taken.
 fn branch_common(current_pc: &mut Addr, offset: i8, take_branch: bool) {
     let current = *current_pc;
-    let target_address = current.offset(offset.into());
-    let following_address = current.offset(2);
+    let target_address = current.offset(offset);
+    let following_address = current.offset(2u8);
     let page_increment = on_different_pages(following_address, target_address);
     *current_pc = if take_branch {
         target_address
