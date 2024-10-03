@@ -722,7 +722,59 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(cycles);
         },
-        // 15 more
+        Instruction::OrMemory => {
+            let (value, cycles) = match addressing_mode {
+                AddressingMode::Immediate => {
+                    extract!(Operand::OneByte(immediate));
+                    (immediate, 2)
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (state.read_byte(addr)?, 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (state.read_byte(addr)?, 4 + increment)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (state.read_byte(addr)?, 4 + increment)
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    let addr = Addr::from_u8(zpaddr);
+                    (state.read_byte(addr)?, 3)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
+                    (state.read_byte(addr)?, 4)
+                },
+                AddressingMode::IndexedIndirect => {
+                    extract!(Operand::OneByte(base));
+                    let addr_ptr = Addr::from_u8(base.wrapping_add(state.cpu_regs.x));
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
+                    (state.read_byte(addr)?, 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    extract!(Operand::OneByte(addr_ptr));
+                    let addr_ptr = Addr::from_u8(addr_ptr);
+                    let base = Addr::from(state.read_le_u16(addr_ptr)?);
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (state.read_byte(addr)?, 5 + increment)
+                },
+                _ => bad!(Addressing for ORA),
+            };
+            state.cpu_regs.a |= value;
+            state.cpu_regs.flags.set_nz(state.cpu_regs.a);
+            delay_cycles(cycles);
+        },
+        // 14 more
         _ => todo!()
     }
 
