@@ -730,7 +730,62 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_nz(state.cpu_regs.a);
             delay_cycles(cycles);
         },
-        // 14 more
+        Instruction::ExclusiveOr => {
+            fn xor(input: u8, regs: &mut CpuRegisters) {
+                regs.a ^= input;
+                regs.flags.set_nz(regs.a);
+            }
+            match addressing_mode {
+                AddressingMode::Immediate => {
+                    extract!(Operand::OneByte(immediate));
+                    xor(immediate, &mut state.cpu_regs);
+                    delay_cycles(2);
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    xor(state.read_byte(addr)?, &mut state.cpu_regs);
+                    delay_cycles(4);
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    xor(state.read_byte(addr)?, &mut state.cpu_regs);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    delay_cycles(4 + increment);
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
+                    xor(state.read_byte(addr)?, &mut state.cpu_regs);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    delay_cycles(4 + increment);
+                },
+                AddressingMode::ZeroPage => {
+                    xor(state.read_byte(zpcalc!(offset 0))?, &mut state.cpu_regs);
+                    delay_cycles(3);
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    xor(state.read_byte(zpcalc!(offset X))?, &mut state.cpu_regs);
+                    delay_cycles(4);
+                },
+                AddressingMode::IndexedIndirect => {
+                    let addr_ptr = zpcalc!(offset X);
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
+                    xor(state.read_byte(addr)?, &mut state.cpu_regs);
+                    delay_cycles(6);
+                },
+                AddressingMode::IndirectIndexed => {
+                    extract!(Operand(addr base_ptr));
+                    let base = Addr::from(state.read_le_u16(base_ptr)?);
+                    let addr = base.offset(state.cpu_regs.y);
+                    xor(state.read_byte(addr)?, &mut state.cpu_regs);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    delay_cycles(5 + increment);
+                },
+                _ => bad!(Addressing for EOR),
+            };
+        },
+        // 13 more
         _ => todo!()
     }
 
