@@ -785,7 +785,24 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 _ => bad!(Addressing for EOR),
             };
         },
-        // 13 more
+        Instruction::TestBits => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (addr, 4)
+                },
+                AddressingMode::ZeroPage => (zpcalc!(offset 0), 3),
+                _ => bad!(Addressing for BIT),
+            };
+            let value = state.read_byte(addr)?;
+            let and_result = value & state.cpu_regs.a;
+            let value = bv::BitArray::<u8, bv::Lsb0>::new(value);
+            state.cpu_regs.flags.set_negative(value[7]);
+            state.cpu_regs.flags.set_overflow(value[6]);
+            state.cpu_regs.flags.set_zero(and_result == 0);
+            delay_cycles(cycles);
+        },
+        // 12 more
         _ => todo!()
     }
 

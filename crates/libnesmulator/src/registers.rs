@@ -55,9 +55,9 @@ impl CpuFlags {
     /// Sets the negative and zero flags accordingly
     /// as if this value is being stored.
     pub(crate) fn set_nz(&mut self, value: u8) {
-        self.inner.set(1, value == 0);
+        self.set_zero(value == 0);
         let value = BitArray::<u8, bv::Lsb0>::new(value);
-        self.inner.set(7, value[7]);
+        self.set_negative(value[7]);
     }
 
     pub(crate) fn set_carry(&mut self, val: bool) { self.inner.set(0, val) }
@@ -66,6 +66,10 @@ impl CpuFlags {
     }
     pub(crate) fn set_overflow(&mut self, overflow: bool) {
         self.inner.set(6, overflow);
+    }
+    pub(crate) fn set_zero(&mut self, zero: bool) { self.inner.set(1, zero) }
+    pub(crate) fn set_negative(&mut self, negative: bool) {
+        self.inner.set(7, negative);
     }
 }
 
