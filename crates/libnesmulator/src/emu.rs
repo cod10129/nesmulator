@@ -231,6 +231,19 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         }};
     }
 
+    macro_rules! zpcalc {
+        (offset $offset:tt) => {{
+            extract!(Operand::OneByte(zpaddr));
+            $crate::Addr::from_u8(u8::wrapping_add(
+                zpaddr,
+                zpcalc!(@@internal pick-offset $offset),
+            ))
+        }};
+        (@@internal pick-offset X) => {{ state.cpu_regs.x }};
+        (@@internal pick-offset Y) => {{ state.cpu_regs.y }};
+        (@@internal pick-offset 0) => {{ 0u8 }};
+    }
+
     match instruction {
         Instruction::NoOp => {
             extract!(Implied None for NOP);
@@ -274,14 +287,11 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
-                extract!(Operand::OneByte(zpaddr));
-                state.write_byte(state.cpu_regs.x, Addr::from_u8(zpaddr))?;
+                state.write_byte(state.cpu_regs.x, zpcalc!(offset 0))?;
                 delay_cycles(3);
             },
             AddressingMode::ZeroPageIndexedY => {
-                extract!(Operand::OneByte(base));
-                let addr = base.wrapping_add(state.cpu_regs.y);
-                state.write_byte(state.cpu_regs.x, Addr::from_u8(addr))?;
+                state.write_byte(state.cpu_regs.x, zpcalc!(offset Y))?;
                 delay_cycles(4);
             },
             _ => bad!(Addressing for STX),
@@ -293,14 +303,11 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 delay_cycles(4);
             }
             AddressingMode::ZeroPage => {
-                extract!(Operand::OneByte(zpaddr));
-                state.write_byte(state.cpu_regs.y, Addr::from_u8(zpaddr))?;
+                state.write_byte(state.cpu_regs.y, zpcalc!(offset 0))?;
                 delay_cycles(3);
             },
             AddressingMode::ZeroPageIndexedX => {
-                extract!(Operand::OneByte(base));
-                let addr = base.wrapping_add(state.cpu_regs.x);
-                state.write_byte(state.cpu_regs.y, Addr::from_u8(addr))?;
+                state.write_byte(state.cpu_regs.y, zpcalc!(offset X))?;
                 delay_cycles(4);
             },
             _ => bad!(Addressing for STY),
@@ -319,20 +326,12 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     extract!(Operand(addr base));
                     (base.offset(state.cpu_regs.y), 5)
                 },
-                AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    (Addr::from_u8(zpaddr), 3)
-                },
-                AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(base));
-                    (Addr::from_u8(base.wrapping_add(state.cpu_regs.x)), 4)
-                },
+                AddressingMode::ZeroPage => (zpcalc!(offset 0), 3),
+                AddressingMode::ZeroPageIndexedX => (zpcalc!(offset X), 4),
                 AddressingMode::IndexedIndirect => {
-                    extract!(Operand::OneByte(base));
-                    let addr_location = Addr::from_u8(
-                        base.wrapping_add(state.cpu_regs.x)
-                    );
-                    (state.read_le_u16(addr_location)?.into(), 6)
+                    let addr_location = zpcalc!(offset X);
+                    let addr = state.read_le_u16(addr_location)?;
+                    (addr.into(), 6)
                 },
                 AddressingMode::IndirectIndexed => {
                     extract!(Operand::OneByte(base_addr));
@@ -410,14 +409,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     extract!(Operand(addr base));
                     (base.offset(state.cpu_regs.x), 7)
                 },
-                AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    (Addr::from_u8(zpaddr), 5)
-                },
-                AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    (Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x)), 6)
-                },
+                AddressingMode::ZeroPage => (zpcalc!(offset 0), 5),
+                AddressingMode::ZeroPageIndexedX => (zpcalc!(offset X), 6),
                 _ => bad!(Addressing for INC),
             };
             let orig = state.read_byte(addr)?;
@@ -450,14 +443,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     extract!(Operand(addr base));
                     (base.offset(state.cpu_regs.x), 7)
                 },
-                AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    (Addr::from_u8(zpaddr), 5)
-                },
-                AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    (Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x)), 6)
-                },
+                AddressingMode::ZeroPage => (zpcalc!(offset 0), 5),
+                AddressingMode::ZeroPageIndexedX => (zpcalc!(offset X), 6),
                 _ => bad!(Addressing for DEC),
             };
             let decremented = state.read_byte(addr)?.wrapping_sub(1);
@@ -500,18 +487,13 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     (state.read_byte(addr)?, 4 + u8::from(increment))
                 },
                 AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    let addr = Addr::from_u8(zpaddr);
-                    (state.read_byte(addr)?, 3)
+                    (state.read_byte(zpcalc!(offset 0))?, 3)
                 },
                 AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
-                    (state.read_byte(addr)?, 4)
+                    (state.read_byte(zpcalc!(offset X))?, 4)
                 },
                 AddressingMode::IndexedIndirect => {
-                    extract!(Operand::OneByte(base));
-                    let addrloc = Addr::from_u8(base.wrapping_add(state.cpu_regs.x));
+                    let addrloc = zpcalc!(offset X);
                     let addr = state.read_le_u16(addrloc)?.into();
                     (state.read_byte(addr)?, 6)
                 },
@@ -519,8 +501,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     extract!(Operand::OneByte(baseloc));
                     let base = state.read_le_u16(Addr::from_u8(baseloc))?;
                     let addr = base.checked_add(state.cpu_regs.y.into()).unwrap();
-                    let cycles = 5 +
-                        u8::from(on_different_pages(base.into(), addr.into()));
+                    let increment = on_different_pages(base.into(), addr.into());
+                    let cycles = 5 + u8::from(increment);
                     (state.read_byte(addr.into())?, cycles)
                 },
                 _ => bad!(Addressing for LDA),
@@ -542,15 +524,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     let increment = on_different_pages(base, addr);
                     (Some(addr), (4 + u8::from(increment)))
                 },
-                AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    (Some(Addr::from_u8(zpaddr)), 3)
-                },
-                AddressingMode::ZeroPageIndexedY => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = zpbase.wrapping_add(state.cpu_regs.y);
-                    (Some(Addr::from_u8(addr)), 4)
-                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 3),
+                AddressingMode::ZeroPageIndexedY => (Some(zpcalc!(offset Y)), 4),
                 _ => bad!(Addressing for LDX),
             };
             let value = match addr {
@@ -577,15 +552,8 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     let increment = on_different_pages(base, addr);
                     (Some(addr), 4 + u8::from(increment))
                 },
-                AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    (Some(Addr::from_u8(zpaddr)), 3)
-                },
-                AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = zpbase.wrapping_add(state.cpu_regs.x);
-                    (Some(Addr::from_u8(addr)), 4)
-                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 3),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 4),
                 _ => bad!(Addressing for LDY),
             };
             let value = match addr {
@@ -653,16 +621,14 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     delay_cycles(7);
                 },
                 AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    let addr = Addr::from_u8(zpaddr);
+                    let addr = zpcalc!(offset 0);
                     let input = state.read_byte(addr)?;
                     let out = rol_calc(input, &mut state.cpu_regs.flags);
                     state.write_byte(out, addr)?;
                     delay_cycles(5);
                 },
                 AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
+                    let addr = zpcalc!(offset X);
                     let input = state.read_byte(addr)?;
                     let out = rol_calc(input, &mut state.cpu_regs.flags);
                     state.write_byte(out, addr)?;
@@ -694,19 +660,14 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     (state.read_byte(addr)?, 4 + increment)
                 },
                 AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    let addr = Addr::from_u8(zpaddr);
-                    (state.read_byte(addr)?, 3)
+                    (state.read_byte(zpcalc!(offset 0))?, 3)
                 },
                 AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = zpbase.wrapping_add(state.cpu_regs.x);
-                    (state.read_byte(Addr::from_u8(addr))?, 4)
+                    (state.read_byte(zpcalc!(offset X))?, 4)
                 },
                 AddressingMode::IndexedIndirect => {
-                    extract!(Operand::OneByte(zpbaseloc));
-                    let addr_ptr = zpbaseloc.wrapping_add(state.cpu_regs.x);
-                    let addr: Addr = state.read_le_u16(Addr::from_u8(addr_ptr))?.into();
+                    let addr_ptr = zpcalc!(offset X);
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
                     (state.read_byte(addr)?, 6)
                 },
                 AddressingMode::IndirectIndexed => {
@@ -745,18 +706,13 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     (state.read_byte(addr)?, 4 + increment)
                 },
                 AddressingMode::ZeroPage => {
-                    extract!(Operand::OneByte(zpaddr));
-                    let addr = Addr::from_u8(zpaddr);
-                    (state.read_byte(addr)?, 3)
+                    (state.read_byte(zpcalc!(offset 0))?, 3)
                 },
                 AddressingMode::ZeroPageIndexedX => {
-                    extract!(Operand::OneByte(zpbase));
-                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
-                    (state.read_byte(addr)?, 4)
+                    (state.read_byte(zpcalc!(offset X))?, 4)
                 },
                 AddressingMode::IndexedIndirect => {
-                    extract!(Operand::OneByte(base));
-                    let addr_ptr = Addr::from_u8(base.wrapping_add(state.cpu_regs.x));
+                    let addr_ptr = zpcalc!(offset X);
                     let addr = Addr::from(state.read_le_u16(addr_ptr)?);
                     (state.read_byte(addr)?, 6)
                 },
