@@ -1,8 +1,10 @@
 //! EMUlator module.
 #![allow(clippy::doc_markdown)] // ^^
 
+use bitvec::prelude as bv;
+
 use crate::Addr;
-use crate::{CpuRegisters, PpuState};
+use crate::{CpuRegisters, CpuFlags, PpuState};
 use crate::{Instruction, InstructionWithMode, FullInstruction, AddressingMode, Operand};
 use crate::mapping::Mapper;
 
@@ -602,11 +604,64 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
         },
         Instruction::PullFlags => {
             extract!(Implied None for PLP);
-            let flags = crate::CpuFlags::from_pulled_value(state.pop_byte()?);
+            let flags = CpuFlags::from_pulled_value(state.pop_byte()?);
             state.cpu_regs.flags = flags;
             delay_cycles(4);
         },
-        // 17 more
+        Instruction::RotateLeft => {
+            fn rol_calc(input: u8, flags: &mut CpuFlags) -> u8 {
+                let mut bits = bv::BitArray::<u8, bv::Lsb0>::new(input);
+                let carry_out = bits[7];
+                // ABCDEFGH -> BCDEFGH0
+                bits.copy_within(0..7, 1);
+                bits.set(0, flags.get_carry());
+                flags.set_carry(carry_out);
+                let out = bits.into_inner();
+                flags.set_nz(out);
+                out
+            }
+            match addressing_mode {
+                AddressingMode::Accumulator => {
+                    extract!(Operand::None);
+                    state.cpu_regs.a = rol_calc(state.cpu_regs.a, &mut state.cpu_regs.flags);
+                    delay_cycles(2);
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand::TwoBytes(addr));
+                    let addr = Addr::from(addr);
+                    let input = state.read_byte(addr)?;
+                    let out = rol_calc(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                    delay_cycles(6);
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand::TwoBytes(addr));
+                    let addr = Addr::from(addr.wrapping_add(state.cpu_regs.x.into()));
+                    let input = state.read_byte(addr)?;
+                    let out = rol_calc(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                    delay_cycles(7);
+                },
+                AddressingMode::ZeroPage => {
+                    extract!(Operand::OneByte(zpaddr));
+                    let addr = Addr::from_u8(zpaddr);
+                    let input = state.read_byte(addr)?;
+                    let out = rol_calc(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                    delay_cycles(5);
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    extract!(Operand::OneByte(zpbase));
+                    let addr = Addr::from_u8(zpbase.wrapping_add(state.cpu_regs.x));
+                    let input = state.read_byte(addr)?;
+                    let out = rol_calc(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                    delay_cycles(6);
+                },
+                _ => bad!(Addressing for ROL),
+            }
+        },
+        // 16 more
         _ => todo!()
     }
 
