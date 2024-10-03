@@ -68,7 +68,7 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) fn read_byte(&self, addr: Addr) -> Result<u8, Fault> {
+    pub fn read_byte(&self, addr: Addr) -> Result<u8, Fault> {
         let addr_usz: usize = addr.into_num().into();
         match addr.into_num() {
             0x0000..0x0800 => Ok(self.internal_ram[addr_usz]),
@@ -83,7 +83,7 @@ impl State {
         }
     }
 
-    pub(crate) fn write_byte(&mut self, byte: u8, addr: Addr) -> Result<(), Fault> {
+    pub fn write_byte(&mut self, byte: u8, addr: Addr) -> Result<(), Fault> {
         let addr_usz: usize = addr.into_num().into();
         match addr.into_num() {
             0x0000..0x0800 => self.internal_ram[addr_usz] = byte,
@@ -97,7 +97,7 @@ impl State {
         Ok(())
     }
 
-    fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
+    pub fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
         let first = self.read_byte(addr)?;
         let last = self.read_byte(addr.offset(1u8))?;
         Ok(u16::from_le_bytes([first, last]))
