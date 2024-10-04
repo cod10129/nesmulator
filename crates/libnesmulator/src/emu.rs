@@ -802,7 +802,20 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.flags.set_zero(and_result == 0);
             delay_cycles(cycles);
         },
-        // 12 more
+        Instruction::JumpToSubroutine => {
+            let AddressingMode::Absolute = addressing_mode else {
+                bad!(Addressing for JSR);
+            };
+            extract!(Operand(addr target_addr));
+            let to_push = state.cpu_regs.pc.offset(2u8);
+            let [high, low] = to_push.into_num().to_le_bytes();
+            state.push_byte(high)?;
+            state.push_byte(low)?;
+            state.cpu_regs.pc = target_addr;
+            should_push_pc = false;
+            delay_cycles(6);
+        },
+        // 11 more
         _ => todo!()
     }
 
