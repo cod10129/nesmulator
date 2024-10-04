@@ -840,7 +840,18 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             should_push_pc = false;
             delay_cycles(7);
         },
-        // 9 more
+        Instruction::ReturnFromInterrupt => {
+            extract!(Implied None for RTI);
+            let flags = state.pop_byte()?;
+            state.cpu_regs.flags = CpuFlags::from_pulled_value(flags);
+            let pc_low = state.pop_byte()?;
+            let pc_high = state.pop_byte()?;
+            let new_pc = Addr::from_num(u16::from_le_bytes([pc_high, pc_low]));
+            state.cpu_regs.pc = new_pc;
+            should_push_pc = false;
+            delay_cycles(6);
+        },
+        // 8 more
         _ => todo!()
     }
 
