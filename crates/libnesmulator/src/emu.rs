@@ -815,7 +815,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             should_push_pc = false;
             delay_cycles(6);
         },
-        // 11 more
+        Instruction::ReturnFromSubroutine => {
+            extract!(Implied None for RTS);
+            let low = state.pop_byte()?;
+            let high = state.pop_byte()?;
+            let pc = Addr::from_num(u16::from_le_bytes([high, low]));
+            state.cpu_regs.pc = pc.offset(1u8);
+            should_push_pc = false;
+            delay_cycles(6);
+        },
+        // 10 more
         _ => todo!()
     }
 
