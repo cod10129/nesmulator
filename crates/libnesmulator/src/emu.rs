@@ -808,7 +808,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             };
             extract!(Operand(addr target_addr));
             let to_push = state.cpu_regs.pc.offset(2u8);
-            let [high, low] = to_push.into_num().to_le_bytes();
+            let [low, high] = to_push.into_num().to_le_bytes();
             state.push_byte(high)?;
             state.push_byte(low)?;
             state.cpu_regs.pc = target_addr;
@@ -819,7 +819,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             extract!(Implied None for RTS);
             let low = state.pop_byte()?;
             let high = state.pop_byte()?;
-            let pc = Addr::from_num(u16::from_le_bytes([high, low]));
+            let pc = Addr::from_num(u16::from_le_bytes([low, high]));
             state.cpu_regs.pc = pc.offset(1u8);
             should_push_pc = false;
             delay_cycles(6);
