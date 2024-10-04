@@ -27,9 +27,9 @@ pub struct Addr {
 
 impl Addr {
     pub const NULL: Self = Self { inner: 0 };
-    pub fn from_num(n: u16) -> Self { n.into() }
+    pub const fn from_num(n: u16) -> Self { Self { inner: n } }
     pub fn from_u8(n: u8) -> Self { Self::from_num(n.into()) }
-    pub fn into_num(self) -> u16 { self.inner }
+    pub const fn into_num(self) -> u16 { self.inner }
 
     /// Overflow always wraps here
     pub fn offset(self, offset: impl Into<i16>) -> Addr {

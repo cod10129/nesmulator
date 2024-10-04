@@ -124,6 +124,12 @@ impl State {
         )])
     }
 
+    /// Reads the interrupt vector from `0xFFFE-FFFF`.
+    fn interrupt_vector(&self) -> Result<Addr, Fault> {
+        const INTERRUPT_ADDRESS: Addr = Addr::from_num(0xFFFE);
+        self.read_le_u16(INTERRUPT_ADDRESS).map(Addr::from_num)
+    }
+
     pub fn exec_instruction(&mut self, inst: FullInstruction) -> Result<(), Fault> {
         exec_instruction(self, inst)
     }
@@ -824,7 +830,17 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             should_push_pc = false;
             delay_cycles(6);
         },
-        // 10 more
+        Instruction::Break => {
+            extract!(Implied None for BRK);
+            let pc_to_push = state.cpu_regs.pc.offset(2u8);
+            let [low, high] = pc_to_push.into_num().to_le_bytes();
+            state.push_byte(high)?;
+            state.push_byte(low)?;
+            state.cpu_regs.pc = state.interrupt_vector()?;
+            should_push_pc = false;
+            delay_cycles(7);
+        },
+        // 9 more
         _ => todo!()
     }
 
