@@ -895,11 +895,6 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             delay_cycles(cycles);
         },
         Instruction::CompareAccumulator => {
-            fn cmp_impl(input: u8, regs: &mut CpuRegisters) {
-                let result = regs.a.wrapping_sub(input);
-                regs.flags.set_nz(result);
-                regs.flags.set_carry(input <= regs.a);
-            }
             let (addr, cycles) = match addressing_mode {
                 AddressingMode::Immediate => (None, 2),
                 AddressingMode::Absolute => {
@@ -937,11 +932,16 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             match addr {
                 None => {
                     extract!(Operand::OneByte(immediate));
-                    cmp_impl(immediate, &mut state.cpu_regs);
+                    cmp_impl(
+                        immediate, &mut state.cpu_regs.flags,
+                        state.cpu_regs.a
+                    );
                 },
-                Some(addr) => {
-                    cmp_impl(state.read_byte(addr)?, &mut state.cpu_regs);
-                },
+                Some(addr) => cmp_impl(
+                    state.read_byte(addr)?,
+                    &mut state.cpu_regs.flags,
+                    state.cpu_regs.a,
+                ),
             }
             delay_cycles(cycles);
         },
@@ -978,6 +978,14 @@ fn branch_common(current_pc: &mut Addr, offset: i8, take_branch: bool) {
         true => 3 + u8::from(page_increment),
     };
     delay_cycles(cycles);
+}
+
+/// Compares the input from memory to the `register`.
+/// Sets the flags accordingly.
+fn cmp_impl(input: u8, flags: &mut CpuFlags, register: u8) {
+    let result = register.wrapping_sub(input);
+    flags.set_nz(result);
+    flags.set_carry(input <= register);
 }
 
 fn on_different_pages(lhs: Addr, rhs: Addr) -> bool {
