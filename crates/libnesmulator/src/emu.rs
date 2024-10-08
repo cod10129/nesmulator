@@ -983,7 +983,47 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             cmp_impl(value, &mut state.cpu_regs.flags, state.cpu_regs.y);
             delay_cycles(cycles);
         },
-        // 4 more
+        Instruction::LogicalShiftRight => {
+            fn lsr_impl(input: u8, flags: &mut CpuFlags) -> u8 {
+                let input = bv::BitArray::<_, bv::Lsb0>::new(input);
+                flags.set_carry(input[0]);
+                let output = {
+                    let mut input = input;
+                    input.copy_within(1..8, 0);
+                    input.set(7, false);
+                    input
+                };
+                output.into_inner()
+            }
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Accumulator => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 6)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    (Some(addr), 7)
+                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 5),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 6),
+                _ => bad!(Addressing for LSR),
+            };
+            match addr {
+                None => {
+                    let output = lsr_impl(state.cpu_regs.a, &mut state.cpu_regs.flags);
+                    state.cpu_regs.a = output;
+                },
+                Some(addr) => {
+                    let input = state.read_byte(addr)?;
+                    let output = lsr_impl(input, &mut state.cpu_regs.flags);
+                    state.cpu_regs.a = output;
+                },
+            }
+            delay_cycles(cycles);
+        },
+        // 3 more
         _ => todo!()
     }
 
