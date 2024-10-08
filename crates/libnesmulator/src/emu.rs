@@ -945,7 +945,26 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             delay_cycles(cycles);
         },
-        // 6 more
+        Instruction::CompareXRegister => {
+            let (value, cycles) = match addressing_mode {
+                AddressingMode::Immediate => {
+                    extract!(Operand::OneByte(immediate));
+                    (immediate, 2)
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (state.read_byte(addr)?, 4)
+                },
+                AddressingMode::ZeroPage => {
+                    let addr = zpcalc!(offset 0);
+                    (state.read_byte(addr)?, 3)
+                },
+                _ => bad!(Addressing for CPX),
+            };
+            cmp_impl(value, &mut state.cpu_regs.flags, state.cpu_regs.x);
+            delay_cycles(cycles);
+        },
+        // 5 more
         _ => todo!()
     }
 
