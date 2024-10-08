@@ -1067,7 +1067,68 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             delay_cycles(cycles);
         },
-        // 2 more
+        Instruction::AddWithCarry => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Immediate => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::ZeroPage => {
+                    let addr = zpcalc!(offset 0);
+                    (Some(addr), 3)
+                },
+                AddressingMode::ZeroPageIndexedX => {
+                    let addr = zpcalc!(offset X);
+                    (Some(addr), 4)
+                },
+                AddressingMode::IndexedIndirect => {
+                    let addr_ptr = zpcalc!(offset X);
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
+                    (Some(addr), 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    let addr_ptr = zpcalc!(offset 0);
+                    let base = Addr::from(state.read_le_u16(addr_ptr)?);
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 5 + increment)
+                },
+                _ => bad!(Addressing for ADC),
+            };
+            let input = match addr {
+                None => {
+                    extract!(Operand::OneByte(immediate));
+                    immediate
+                },
+                Some(addr) => state.read_byte(addr)?,
+            };
+            let orig_sign_bit = {
+                bv::BitArray::<_, bv::Lsb0>::new(input)[7]
+            };
+            let (result, carry) = state.cpu_regs.a.overflowing_add(input);
+            let new_sign_bit = {
+                bv::BitArray::<_, bv::Lsb0>::new(result)[7]
+            };
+            state.cpu_regs.flags.set_overflow(orig_sign_bit != new_sign_bit);
+            state.cpu_regs.flags.set_carry(carry);
+            state.cpu_regs.flags.set_nz(result);
+            state.cpu_regs.a = result;
+            delay_cycles(cycles);
+        },
+        // 1 more
         _ => todo!()
     }
 
