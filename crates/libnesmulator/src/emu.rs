@@ -781,8 +781,10 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                     delay_cycles(6);
                 },
                 AddressingMode::IndirectIndexed => {
-                    extract!(Operand(addr base_ptr));
-                    let base = Addr::from(state.read_le_u16(base_ptr)?);
+                    extract!(Operand::OneByte(base_ptr));
+                    let base = Addr::from(
+                        state.read_le_u16(Addr::from_u8(base_ptr))?
+                    );
                     let addr = base.offset(state.cpu_regs.y);
                     xor(state.read_byte(addr)?, &mut state.cpu_regs);
                     let increment = u8::from(on_different_pages(base, addr));
@@ -892,7 +894,58 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             delay_cycles(cycles);
         },
-        // 7 more
+        Instruction::CompareAccumulator => {
+            fn cmp_impl(input: u8, regs: &mut CpuRegisters) {
+                let result = regs.a.wrapping_sub(input);
+                regs.flags.set_nz(result);
+                regs.flags.set_carry(input <= regs.a);
+            }
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Immediate => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 3),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 4),
+                AddressingMode::IndexedIndirect => {
+                    let addr_ptr = zpcalc!(offset X);
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
+                    (Some(addr), 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    extract!(Operand::OneByte(base_ptr));
+                    let base = Addr::from(state.read_le_u16(Addr::from_u8(base_ptr))?);
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 5 + increment)
+                },
+                _ => bad!(Addressing for CMP),
+            };
+            match addr {
+                None => {
+                    extract!(Operand::OneByte(immediate));
+                    cmp_impl(immediate, &mut state.cpu_regs);
+                },
+                Some(addr) => {
+                    cmp_impl(state.read_byte(addr)?, &mut state.cpu_regs);
+                },
+            }
+            delay_cycles(cycles);
+        },
+        // 6 more
         _ => todo!()
     }
 
