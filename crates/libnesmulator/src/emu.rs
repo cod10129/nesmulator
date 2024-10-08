@@ -1023,7 +1023,51 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             }
             delay_cycles(cycles);
         },
-        // 3 more
+        Instruction::RotateRight => {
+            fn ror_impl(input: u8, flags: &mut CpuFlags) -> u8 {
+                flags.set_negative(flags.get_carry());
+                let input = bv::BitArray::<_, bv::Lsb0>::new(input);
+                let output_carry = input[0];
+                let output = {
+                    let mut input = input;
+                    input.copy_within(1..8, 0);
+                    input.set(7, flags.get_carry());
+                    input.into_inner()
+                };
+                flags.set_carry(output_carry);
+                flags.set_zero(output == 0);
+                output
+            }
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Accumulator => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 6)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    (Some(addr), 7)
+                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 5),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 6),
+                _ => bad!(Addressing for ROR),
+            };
+            match addr {
+                // Accumulator
+                None => {
+                    let output = ror_impl(state.cpu_regs.a, &mut state.cpu_regs.flags);
+                    state.cpu_regs.a = output;
+                },
+                Some(addr) => {
+                    let input = state.read_byte(addr)?;
+                    let out = ror_impl(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                },
+            }
+            delay_cycles(cycles);
+        },
+        // 2 more
         _ => todo!()
     }
 
