@@ -598,7 +598,7 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
                 let mut bits = bv::BitArray::<u8, bv::Lsb0>::new(input);
                 let carry_out = bits[7];
                 // ABCDEFGH -> BCDEFGH0
-                bits.copy_within(0..7, 1);
+                bits.copy_within(0..8, 1);
                 bits.set(0, flags.get_carry());
                 flags.set_carry(carry_out);
                 let out = bits.into_inner();
@@ -851,7 +851,48 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             should_push_pc = false;
             delay_cycles(6);
         },
-        // 8 more
+        Instruction::ArithmeticShiftLeft => {
+            fn asl_impl(input: u8, flags: &mut CpuFlags) -> u8 {
+                let mut value = bv::BitArray::<u8, bv::Lsb0>::new(input);
+                let carry_out = value[7];
+                value.copy_within(0..8, 1);
+                value.set(0, false);
+                let output = value.into_inner();
+                flags.set_nz(output);
+                flags.set_carry(carry_out);
+                output
+            }
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Accumulator => {
+                    (None, 2)
+                },
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 6)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    (Some(base.offset(state.cpu_regs.x)), 7)
+                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 5),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 6),
+                _ => bad!(Addressing for ASL),
+            };
+            match addr {
+                // Accumulator
+                None => {
+                    let val = asl_impl(state.cpu_regs.a, &mut state.cpu_regs.flags);
+                    state.cpu_regs.a = val;
+                },
+                Some(addr) => {
+                    let input = state.read_byte(addr)?;
+                    let out = asl_impl(input, &mut state.cpu_regs.flags);
+                    state.write_byte(out, addr)?;
+                },
+            }
+            delay_cycles(cycles);
+        },
+        // 7 more
         _ => todo!()
     }
 
