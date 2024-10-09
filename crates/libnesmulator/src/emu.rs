@@ -1118,7 +1118,10 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             let orig_sign_bit = {
                 bv::BitArray::<_, bv::Lsb0>::new(input)[7]
             };
-            let (result, carry) = state.cpu_regs.a.overflowing_add(input);
+            let (result, carry) = overflowing_add_with_carry(
+                state.cpu_regs.a, input,
+                state.cpu_regs.flags.get_carry(),
+            );
             let new_sign_bit = {
                 bv::BitArray::<_, bv::Lsb0>::new(result)[7]
             };
@@ -1128,8 +1131,68 @@ fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Faul
             state.cpu_regs.a = result;
             delay_cycles(cycles);
         },
-        // 1 more
-        _ => todo!()
+        Instruction::SubtractWithCarry => {
+            let (addr, cycles) = match addressing_mode {
+                AddressingMode::Immediate => (None, 2),
+                AddressingMode::Absolute => {
+                    extract!(Operand(addr));
+                    (Some(addr), 4)
+                },
+                AddressingMode::AbsoluteIndexedX => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.x);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::AbsoluteIndexedY => {
+                    extract!(Operand(addr base));
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 4 + increment)
+                },
+                AddressingMode::ZeroPage         => (Some(zpcalc!(offset 0)), 3),
+                AddressingMode::ZeroPageIndexedX => (Some(zpcalc!(offset X)), 4),
+                AddressingMode::IndexedIndirect => {
+                    let addr_ptr = zpcalc!(offset X);
+                    let addr = Addr::from(state.read_le_u16(addr_ptr)?);
+                    (Some(addr), 6)
+                },
+                AddressingMode::IndirectIndexed => {
+                    let base_ptr = zpcalc!(offset 0);
+                    let base = Addr::from(state.read_le_u16(base_ptr)?);
+                    let addr = base.offset(state.cpu_regs.y);
+                    let increment = u8::from(on_different_pages(base, addr));
+                    (Some(addr), 5 + increment)
+                },
+                _ => bad!(Addressing for SBC),
+            };
+            let input = match addr {
+                None => {
+                    extract!(Operand::OneByte(immediate));
+                    immediate
+                },
+                Some(addr) => state.read_byte(addr)?,
+            };
+            // Honestly not entirely sure about this code
+            // https://www.pagetable.com/c64ref/6502/?tab=2#SBC
+            let old_sign = {
+                bv::BitArray::<_, bv::Lsb0>::new(input)[7]
+            };
+            let (result, carry) = overflowing_sub_with_carry(
+                state.cpu_regs.a, input,
+                state.cpu_regs.flags.get_carry(),
+            );
+            let new_sign = {
+                bv::BitArray::<_, bv::Lsb0>::new(result)[7]
+            };
+            state.cpu_regs.flags.set_overflow(old_sign != new_sign);
+            state.cpu_regs.flags.set_carry(carry);
+            state.cpu_regs.flags.set_nz(result);
+            state.cpu_regs.a = result;
+            delay_cycles(cycles);
+        },
+        // 0 more!!
+        // _ => todo!()
     }
 
     if should_push_pc {
@@ -1169,6 +1232,20 @@ fn cmp_impl(input: u8, flags: &mut CpuFlags, register: u8) {
     let result = register.wrapping_sub(input);
     flags.set_nz(result);
     flags.set_carry(input <= register);
+}
+
+/// (Unstable) [`u8::carrying_add`].
+fn overflowing_add_with_carry(lhs: u8, rhs: u8, carry: bool) -> (u8, bool) {
+    let (res1, c1) = lhs.overflowing_add(rhs);
+    let (final_sum, c2) = res1.overflowing_add(u8::from(carry));
+    (final_sum, c1 || c2)
+}
+
+/// (Unstable) [`u8::borrowing_sub`].
+fn overflowing_sub_with_carry(lhs: u8, rhs: u8, carry: bool) -> (u8, bool) {
+    let (r1, c1) = lhs.overflowing_sub(rhs);
+    let (r2, c2) = r1.overflowing_sub(u8::from(carry));
+    (r2, c1 || c2)
 }
 
 fn on_different_pages(lhs: Addr, rhs: Addr) -> bool {
