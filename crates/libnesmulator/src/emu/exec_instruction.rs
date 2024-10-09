@@ -1132,4 +1132,20 @@ mod tests {
         assert!(on_different_pages(0xBEFF.into(), 0xBC00.into()));
         assert!(!on_different_pages(0x1200.into(), 0x12FF.into()));
     }
+
+    #[test]
+    fn carrying_add() {
+        use super::overflowing_add_with_carry as oawc;
+        assert_eq!(oawc(10, 2, true), (13, false));
+        assert_eq!(oawc(255, 2, false), (1, true));
+        assert_eq!(oawc(100, 155, true), (0, true));
+    }
+
+    #[test]
+    fn borrowing_sub() {
+        use super::overflowing_sub_with_carry as oswc;
+        assert_eq!(oswc(7, 5, true), (1, false));
+        assert_eq!(oswc(255, 255, true), (255, true));
+        assert_eq!(oswc(100, 106, false), (250, true));
+    }
 }
