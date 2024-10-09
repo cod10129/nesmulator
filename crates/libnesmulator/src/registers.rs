@@ -17,6 +17,12 @@ pub struct CpuRegisters {
     pub pc: Addr,
 }
 
+impl CpuRegisters {
+    pub(crate) fn sp_as_address(self) -> Addr {
+        Addr::from(u16::from(self.sp) + 0x01_00)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuFlags {
     /// This is actually just a `u8`, but the `bitvec` APIs are very convenient.
@@ -30,6 +36,41 @@ impl CpuFlags {
     pub fn get_interrupt_disable(self) -> bool { self.inner[2] }
     pub fn get_overflow(self) -> bool { self.inner[6] }
     pub fn get_negative(self) -> bool { self.inner[7] }
+
+    pub(crate) fn value_to_push(self, set_b: bool) -> u8 {
+        let mut arr = self.inner;
+        arr.set(4, set_b);
+        arr.set(5, true);
+        arr.into_inner()
+    }
+
+    pub(crate) fn from_pulled_value(pulled: u8) -> Self {
+        let mut arr = BitArray::new(pulled);
+        // Literally these bits are not stored in the NES CPU
+        arr.set(4, false);
+        arr.set(5, true);
+        CpuFlags { inner: arr }
+    }
+
+    /// Sets the negative and zero flags accordingly
+    /// as if this value is being stored.
+    pub(crate) fn set_nz(&mut self, value: u8) {
+        self.set_zero(value == 0);
+        let value = BitArray::<u8, bv::Lsb0>::new(value);
+        self.set_negative(value[7]);
+    }
+
+    pub(crate) fn set_carry(&mut self, val: bool) { self.inner.set(0, val) }
+    pub(crate) fn set_interrupt_disable(&mut self, disable_interrupt: bool) {
+        self.inner.set(2, disable_interrupt);
+    }
+    pub(crate) fn set_overflow(&mut self, overflow: bool) {
+        self.inner.set(6, overflow);
+    }
+    pub(crate) fn set_zero(&mut self, zero: bool) { self.inner.set(1, zero) }
+    pub(crate) fn set_negative(&mut self, negative: bool) {
+        self.inner.set(7, negative);
+    }
 }
 
 /// The full state of the Picture Processing Unit.

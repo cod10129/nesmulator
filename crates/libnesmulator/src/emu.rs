@@ -3,7 +3,7 @@
 
 use crate::Addr;
 use crate::{CpuRegisters, PpuState};
-use crate::{Instruction, InstructionWithMode, FullInstruction, AddressingMode, Operand};
+use crate::{FullInstruction, AddressingMode};
 use crate::mapping::Mapper;
 
 use nesfile::File as NesFile;
@@ -21,6 +21,8 @@ fn delay_cycles(cycles: u8) {
 pub enum Fault {
     /// Program attempted to access unmapped memory
     UnmappedMemory(Addr),
+    /// The stack page ($0100-$01FF) was underflowed by the stack pointer
+    StackUnderflow,
     /// Something went wrong inside nesmulator
     InternalError(InternalErrorFault),
 }
@@ -64,7 +66,7 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) fn read_byte(&self, addr: Addr) -> Result<u8, Fault> {
+    pub fn read_byte(&self, addr: Addr) -> Result<u8, Fault> {
         let addr_usz: usize = addr.into_num().into();
         match addr.into_num() {
             0x0000..0x0800 => Ok(self.internal_ram[addr_usz]),
@@ -79,7 +81,7 @@ impl State {
         }
     }
 
-    pub(crate) fn write_byte(&mut self, byte: u8, addr: Addr) -> Result<(), Fault> {
+    pub fn write_byte(&mut self, byte: u8, addr: Addr) -> Result<(), Fault> {
         let addr_usz: usize = addr.into_num().into();
         match addr.into_num() {
             0x0000..0x0800 => self.internal_ram[addr_usz] = byte,
@@ -93,79 +95,42 @@ impl State {
         Ok(())
     }
 
-    fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
+    pub fn read_le_u16(&self, addr: Addr) -> Result<u16, Fault> {
         let first = self.read_byte(addr)?;
-        let last = self.read_byte(Addr::from(addr.into_num() + 1))?;
+        let last = self.read_byte(addr.offset(1u8))?;
         Ok(u16::from_le_bytes([first, last]))
     }
 
+    /// # Faults
+    /// [`StackUnderflow`](Fault::StackUnderflow)
+    fn push_byte(&mut self, byte: u8) -> Result<(), Fault> {
+        let stack_pointer = self.cpu_regs.sp;
+        let new_sp = stack_pointer.checked_sub(1).ok_or(Fault::StackUnderflow)?;
+        self.cpu_regs.sp = new_sp;
+        self.internal_ram[usize::from(self.cpu_regs.sp_as_address().into_num())] = byte;
+        Ok(())
+    }
+    
+    /// # Faults
+    /// [`StackUnderflow`](Fault::StackUnderflow)
+    fn pop_byte(&mut self) -> Result<u8, Fault> {
+        let stack_pointer = self.cpu_regs.sp;
+        let new_sp = stack_pointer.checked_add(1).ok_or(Fault::StackUnderflow)?;
+        self.cpu_regs.sp = new_sp;
+        Ok(self.internal_ram[usize::from(
+            self.cpu_regs.sp_as_address().into_num()
+        )])
+    }
+
+    /// Reads the interrupt vector from `0xFFFE-FFFF`.
+    fn interrupt_vector(&self) -> Result<Addr, Fault> {
+        const INTERRUPT_ADDRESS: Addr = Addr::from_num(0xFFFE);
+        self.read_le_u16(INTERRUPT_ADDRESS).map(Addr::from_num)
+    }
+
     pub fn exec_instruction(&mut self, inst: FullInstruction) -> Result<(), Fault> {
-        exec_instruction(self, inst)
+        exec_instruction::exec_instruction(self, inst)
     }
 }
 
-#[allow(clippy::single_match_else)]
-#[allow(clippy::too_many_lines)]
-fn exec_instruction(state: &mut State, inst: FullInstruction) -> Result<(), Fault> {
-    let FullInstruction {
-        instruction: InstructionWithMode {
-            instruction_type: instruction,
-            addressing_mode,
-        },
-        operand,
-    } = inst;
-
-    macro_rules! bad {
-        (Addressing for $inst:tt) => {{
-            ::log::error!(
-                "{} instruction encountered with invalid addressing mode {:?}. \
-                This instruction is being ignored, which could cause big problems.",
-                stringify!($inst), addressing_mode,
-            );
-            return Err(Fault::InternalError(InternalErrorFault {
-                kind: InternalFaultKind::InvalidAddressingMode(addressing_mode),
-            }));
-        }};
-        (Operand expected $variant:tt) => {{
-            // This is either type `Operand` or type `fn(u8/16) -> Operand`
-            let _assert_is_variant = crate::Operand::$variant;
-            ::log::error!(
-                "Incorrect operand for mode {:?}: {:?} (expected {:?}). \
-                This error is being ignored to continue operation. \
-                NESmulator will likely fail soon.",
-                addressing_mode, operand, stringify!($variant),
-            );
-            return Err(Fault::InternalError(InternalErrorFault {
-                kind: InternalFaultKind::InvalidOperandType,
-            }));
-        }}
-    }
-
-    match instruction {
-        Instruction::NoOp => match addressing_mode {
-            AddressingMode::Implied => { delay_cycles(2) },
-            _ => bad!(Addressing for NOP),
-        },
-        Instruction::Jump => match addressing_mode {
-            AddressingMode::Absolute => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
-                state.cpu_regs.pc = Addr::from(addr);
-                delay_cycles(3);
-            },
-            AddressingMode::Indirect => {
-                let Operand::TwoBytes(addr) = operand else {
-                    bad!(Operand expected TwoBytes);
-                };
-                let jump_target = state.read_le_u16(addr.into())?;
-                state.cpu_regs.pc = Addr::from(jump_target);
-                delay_cycles(5);
-            }
-            _ => bad!(Addressing for JMP),
-        },
-        // 52 more
-        _ => todo!()
-    }
-    Ok(())
-}
+mod exec_instruction;
