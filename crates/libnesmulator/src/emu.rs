@@ -56,7 +56,7 @@ enum InternalFaultKind {
 }
 
 /// The full state of the emulator.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct State {
     pub file: Box<NesFile>,
     pub cpu_regs: CpuRegisters,
