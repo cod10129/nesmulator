@@ -4,7 +4,7 @@
 use crate::Addr;
 use crate::{CpuRegisters, PpuState};
 use crate::{FullInstruction, AddressingMode};
-use crate::mapping::Mapper;
+use crate::mapping::{MapLookup, MapLookupError, Mapper};
 
 use nesfile::File as NesFile;
 
@@ -21,6 +21,8 @@ fn delay_cycles(cycles: u8) {
 pub enum Fault {
     /// Program attempted to access unmapped memory
     UnmappedMemory(Addr),
+    /// The mapper gave an address that was invalid
+    InvalidMapperAddress(Addr),
     /// The stack page ($0100-$01FF) was underflowed by the stack pointer
     StackUnderflow,
     /// Something went wrong inside nesmulator
@@ -62,6 +64,8 @@ pub struct State {
     pub cpu_regs: CpuRegisters,
     pub ppu_regs: PpuState,
     pub internal_ram: Box<[u8; 2 * 1024]>,
+    pub prg_ram: Box<[u8]>,
+    pub chr_ram: Box<[u8]>,
     pub mapper: Mapper,
 }
 
@@ -76,7 +80,20 @@ impl State {
             0x4000..0x4018 => todo!("Access APU & I/O registers"),
             0x4018..0x4020 => Err(Fault::UnmappedMemory(addr)),
             0x4020..=0xFFFF => {
-                todo!("Read from the mapper");
+                let res = self.mapper.lookup_addr(addr);
+                let lookup = res.map_err(|e| match e {
+                    MapLookupError::AddressNotMapped => Fault::UnmappedMemory(addr),
+                })?;
+                let res: Option<&u8> = match lookup {
+                    MapLookup::PrgRom(loc) => self.file.prg_rom.get(usize::from(loc)),
+                    MapLookup::PrgRam(loc) => self.prg_ram.get(usize::from(loc)),
+                    MapLookup::ChrRom(loc) => self.file.chr_rom.get(usize::from(loc)),
+                    MapLookup::ChrRam(loc) => self.chr_ram.get(usize::from(loc)),
+                };
+                match res {
+                    Some(&byte) => Ok(byte),
+                    None => Err(Fault::InvalidMapperAddress(addr)),
+                }
             },
         }
     }
@@ -90,7 +107,22 @@ impl State {
             0x2008..0x4000 => todo!("Write PPU register mirrors"),
             0x4000..0x4018 => todo!("Write APU & I/O registers"),
             0x4018..0x4020 => return Err(Fault::UnmappedMemory(addr)),
-            0x4020..=0xFFFF => todo!("read from mapper"),
+            0x4020..=0xFFFF => {
+                let lookup = self.mapper.lookup_addr(addr)
+                    .map_err(|e| match e {
+                        MapLookupError::AddressNotMapped => Fault::UnmappedMemory(addr),
+                    })?;
+                let (slice, pos) = match lookup {
+                    MapLookup::PrgRom(loc) => (&mut self.file.prg_rom, loc),
+                    MapLookup::PrgRam(loc) => (&mut self.prg_ram, loc),
+                    MapLookup::ChrRom(loc) => (&mut self.file.chr_rom, loc),
+                    MapLookup::ChrRam(loc) => (&mut self.chr_ram, loc),
+                };
+                match slice.get_mut(usize::from(pos)) {
+                    Some(place) => *place = byte,
+                    None => return Err(Fault::InvalidMapperAddress(addr)),
+                }
+            },
         }
         Ok(())
     }
